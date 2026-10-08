@@ -1,0 +1,1 @@
+"""Spending anomaly detection subpackage."""

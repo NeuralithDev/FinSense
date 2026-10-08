@@ -1,0 +1,19 @@
+{
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    "python.terminal.activateEnvironment": true,
+    "jupyter.defaultKernel": "finsense",
+    "notebook.kernelProviderAssociations": [
+        {
+            "notebookSelector": "*.ipynb",
+            "kernelId": "finsense"
+        }
+    ],
+    "jupyter.kernelPickerType": "shared",
+    "terminal.integrated.env.osx": {
+        "VIRTUAL_ENV": "${workspaceFolder}/.venv",
+        "PATH": "${workspaceFolder}/.venv/bin:${env:PATH}"
+    },
+    "jupyter.kernels.excludePythonEnvironments": [
+        "${workspaceFolder}/.venv/bin/python"
+    ]
+}

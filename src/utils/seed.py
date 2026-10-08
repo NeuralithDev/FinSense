@@ -1,0 +1,23 @@
+"""Reproducibility: set random seeds everywhere.
+
+Usage::
+
+    from src.utils.seed import set_seed
+    set_seed(42)
+"""
+from __future__ import annotations
+import random
+import numpy as np
+
+
+def set_seed(seed: int = 42) -> None:
+    """Seed Python, NumPy, and (if installed) PyTorch."""
+    random.seed(seed)
+    np.random.seed(seed)
+    try:
+        import torch
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+    except ImportError:
+        pass
