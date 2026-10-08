@@ -1,1 +1,0 @@
-"""FinSense application package (FastAPI)."""
