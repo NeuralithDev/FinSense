@@ -1,0 +1,26 @@
+/* FinSense Application Core Utility Styles */
+.fin-app-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+}
+
+.fin-tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.015em;
+}
+
+.hairline-border {
+  border: 1px solid var(--border-subtle);
+}
+
+.hairline-border-b {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.hairline-border-t {
+  border-top: 1px solid var(--border-subtle);
+}

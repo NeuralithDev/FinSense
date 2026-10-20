@@ -1,0 +1,249 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Institutional "Million-Dollar Fintech" Palette (Copilot / Stripe / Ramp / Wise) */
+  --bg-base: #F8FAFC;         /* Warm Alabaster */
+  --bg-surface: #FFFFFF;      /* Pure Crisp White */
+  --bg-surface-secondary: #F1F5F9; /* Subtle Slate container */
+  --bg-surface-hover: #F8FAFC;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #FAFCFE;
+  --bg-input: #FFFFFF;
+  
+  /* Hairline Borders & Dividers */
+  --border-subtle: #E2E8F0;   /* 1px solid hairline */
+  --border-strong: #CBD5E1;
+  --border-focus: #0F172A;
+  
+  /* Typography */
+  --text-primary: #0F172A;    /* Deep Obsidian Slate */
+  --text-secondary: #475569;  /* Muted Slate */
+  --text-muted: #64748B;      /* Light Muted */
+  --text-subtle: #94A3B8;     /* Inactive / Placeholder */
+  
+  /* Semantic Accents */
+  --emerald-50: #ECFDF5;
+  --emerald-100: #D1FAE5;
+  --emerald-500: #10B981;
+  --emerald-600: #0D9488;    /* Institutional Emerald */
+  --emerald-700: #047857;
+  
+  --amber-50: #FFFBEB;
+  --amber-100: #FEF3C7;
+  --amber-500: #F59E0B;
+  --amber-600: #D97706;      /* Caution Amber */
+  --amber-700: #B45309;
+  
+  --crimson-50: #FFF1F2;
+  --crimson-100: #FFE4E6;
+  --crimson-500: #EF4444;
+  --crimson-600: #E11D48;    /* Anomaly Crimson */
+  --crimson-700: #BE123C;
+
+  --blue-50: #F0F9FF;
+  --blue-100: #E0F2FE;
+  --blue-500: #0284C7;
+  --blue-600: #0369A1;
+
+  --slate-900: #0F172A;      /* Primary CTA */
+  --slate-800: #1E293B;
+  --slate-700: #334155;
+  --slate-100: #F1F5F9;
+  
+  /* Fonts */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  
+  /* Radii */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+  
+  /* Ambient Elevation Shadows (Zero Neon Glow) */
+  --shadow-xs: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.06), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.06), 0 4px 6px -4px rgba(15, 23, 42, 0.03);
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.03);
+  --shadow-card-hover: 0 8px 16px -4px rgba(15, 23, 42, 0.07), 0 4px 8px -2px rgba(15, 23, 42, 0.04);
+
+  --transition-fast: 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition: 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  min-height: 100vh;
+  line-height: 1.5;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Institutional Tabular Numbers */
+.tabular-nums, .num, [data-num] {
+  font-family: var(--font-mono) !important;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.015em;
+}
+
+/* Institutional Card */
+.fin-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow var(--transition), border-color var(--transition);
+}
+
+.fin-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* Base Primitives */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: var(--transition-fast);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: var(--slate-900);
+  color: #FFFFFF;
+  border-color: var(--slate-900);
+  box-shadow: var(--shadow-xs);
+}
+
+.btn-primary:hover {
+  background: var(--slate-800);
+  border-color: var(--slate-800);
+}
+
+.btn-emerald {
+  background: var(--emerald-600);
+  color: #FFFFFF;
+  border-color: var(--emerald-600);
+  box-shadow: var(--shadow-xs);
+}
+
+.btn-emerald:hover {
+  background: var(--emerald-700);
+  border-color: var(--emerald-700);
+}
+
+.btn-secondary {
+  background: #FFFFFF;
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+  box-shadow: var(--shadow-xs);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-surface-secondary);
+  border-color: var(--border-strong);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: transparent;
+}
+
+.btn-ghost:hover {
+  background: var(--bg-surface-secondary);
+  color: var(--text-primary);
+}
+
+/* Badge System */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  font-size: 0.725rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.badge-emerald {
+  background: var(--emerald-50);
+  color: var(--emerald-700);
+  border: 1px solid var(--emerald-100);
+}
+
+.badge-amber {
+  background: var(--amber-50);
+  color: var(--amber-700);
+  border: 1px solid var(--amber-100);
+}
+
+.badge-crimson, .badge-rose {
+  background: var(--crimson-50);
+  color: var(--crimson-700);
+  border: 1px solid var(--crimson-100);
+}
+
+.badge-slate {
+  background: var(--slate-100);
+  color: var(--slate-700);
+  border: 1px solid var(--border-subtle);
+}
+
+.badge-blue {
+  background: var(--blue-50);
+  color: var(--blue-600);
+  border: 1px solid var(--blue-100);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Selection */
+::selection {
+  background: #E2E8F0;
+  color: #0F172A;
+}
