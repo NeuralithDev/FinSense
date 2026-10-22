@@ -137,27 +137,58 @@ def get_live_ledger():
 @router.post("/upload")
 def upload_statement(payload: Dict[str, Any]):
     """
-    Ingests raw bank/credit card CSV or JSON statement data, routes it directly
-    through data_cleaning.py -> feature_engineering.py -> models, and updates balances.
+    Ingests raw bank/credit card CSV or PDF statement data (with optional password decryption),
+    routes it through the data pipeline, and updates accounts and SQLite DB.
     """
     try:
         content = payload.get("content", "")
         file_type = payload.get("file_type", "csv")
+        password = payload.get("password", None)
+        account_type = payload.get("account_type", "checking")
+
         if not content:
             raise HTTPException(status_code=400, detail="Missing statement content string.")
 
         pipeline = UserDataPipeline.get_instance()
-        results = pipeline.ingest_statement_file(content, file_type=file_type)
+        results = pipeline.ingest_statement_file(
+            content,
+            file_type=file_type,
+            password=password,
+            account_type=account_type
+        )
+
+        detected_curr = pipeline.accounts.get("checking", {}).get("currency", "INR")
+        account_summary = pipeline.get_multi_account_summary()
 
         return {
             "status": "success",
-            "message": f"Successfully parsed and ingested statement data.",
+            "message": "Successfully parsed and ingested statement data.",
+            "detected_currency": detected_curr,
             "total_transactions": len(pipeline.raw_transactions),
             "accounts": pipeline.accounts,
+            "account_summary": account_summary,
             "pipeline_summary": results
         }
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Statement ingestion error: {str(e)}")
+
+
+@router.get("/accounts")
+def get_aggregated_accounts():
+    """
+    Returns multi-account aggregation summary with net worth, assets, and liabilities.
+    """
+    try:
+        pipeline = UserDataPipeline.get_instance()
+        return {
+            "status": "success",
+            "summary": pipeline.get_multi_account_summary()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Accounts summary error: {str(e)}")
+
 
 
 @router.post("/transaction")

@@ -10,6 +10,7 @@ from typing import Dict, Any, List
 from collections import Counter
 import pandas as pd
 from src.data.user_pipeline import UserDataPipeline
+from src.preprocessing.sequences import DynamicTemporalDensityProfiler
 
 router = APIRouter(prefix="/api/graph", tags=["Spend Graph & Contagion"])
 
@@ -147,15 +148,23 @@ def get_behavioral_graph_insights(user_id: str = "0"):
             }
         ]
 
+        # Dynamic empirical temporal density profiling directly from user transactions
+        profiler = DynamicTemporalDensityProfiler(top_k_windows=3)
+        temporal_profile = profiler.profile_transactions(raw_txs or [])
+
         temporal_clusters = [
-            {"cluster": "Weekday Routine Swipes (Mon-Thu 9AM-6PM)", "spend_share_pct": 42, "category_focus": "Local Stores, Daily Essentials", "impulse_risk": "LOW"},
-            {"cluster": "Weekend Dining & Convenience (Fri-Sat 7PM-11PM)", "spend_share_pct": 36, "category_focus": "Domino's, Blinkit, Quick Commerce", "impulse_risk": "HIGH"},
-            {"cluster": "Monthly Savings & Investments (1st-5th)", "spend_share_pct": 18, "category_focus": "Zerodha, Auto-Sweeps, Reserves", "impulse_risk": "CONTROLLED"},
-            {"cluster": "Late-Night Vulnerability Window (11PM-3AM)", "spend_share_pct": 4, "category_focus": "Instant Delivery, Digital Services", "impulse_risk": "ELEVATED"}
+            {
+                "cluster": f"{w['label']} ({w['primary_category']})",
+                "spend_share_pct": int(round((w['avg_spend'] / max(1.0, sum(x['avg_spend'] for x in temporal_profile['peak_vulnerability_windows']))) * 100)),
+                "category_focus": w['primary_category'],
+                "impulse_risk": w['risk_tier'],
+                "empirical_trigger": w['empirical_trigger']
+            }
+            for w in temporal_profile['peak_vulnerability_windows']
         ]
 
         gnn_nodes = [
-            {"id": "user_active", "label": "Mudit Sharma", "type": "target", "score": 80.0, "runway": 2.4},
+            {"id": "user_active", "label": "Active User", "type": "target", "score": 80.0, "runway": 2.4},
             {"id": "peer_in_101", "label": "Peer Twin #101", "type": "peer_twin", "score": 86.4, "similarity": 0.94, "runway": 3.8},
             {"id": "peer_in_205", "label": "Peer Twin #205", "type": "peer_twin", "score": 82.1, "similarity": 0.91, "runway": 3.2},
             {"id": "peer_in_340", "label": "Peer Twin #340", "type": "peer_twin", "score": 89.0, "similarity": 0.88, "runway": 4.5},
@@ -163,7 +172,7 @@ def get_behavioral_graph_insights(user_id: str = "0"):
         ]
 
         gnn_edges = [
-            {"source": "user_active", "target": "peer_in_101", "weight": 0.94, "shared_traits": "University scholar cohort, Active UPI micro-transfers, Zero debt"},
+            {"source": "user_active", "target": "peer_in_101", "weight": 0.94, "shared_traits": "Active user cohort, Regular UPI transfers, Zero debt"},
             {"source": "user_active", "target": "peer_in_205", "weight": 0.91, "shared_traits": "Tech scholar, Quick commerce user, Zero credit card debt"},
             {"source": "user_active", "target": "peer_in_340", "weight": 0.88, "shared_traits": "Disciplined student saver, Active UPI user, Regular autopilot sweeps"},
             {"source": "user_active", "target": "peer_in_412", "weight": 0.86, "shared_traits": "Regular weekly autopilot sweep user"}
@@ -172,6 +181,9 @@ def get_behavioral_graph_insights(user_id: str = "0"):
         typical_gateway = 51.67
         triggers_secondary = 145.00
     else:
+        profiler = DynamicTemporalDensityProfiler(top_k_windows=3)
+        temporal_profile = profiler.profile_transactions(raw_txs or [])
+
         primary_habits = [
             {
                 "id": "loop_1",
@@ -191,7 +203,16 @@ def get_behavioral_graph_insights(user_id: str = "0"):
             {"source": "Starbucks", "target": "DoorDash", "transition_prob": 0.78, "avg_secondary_ticket": 48.50, "velocity_boost": "1.4x"}
         ]
         habit_loops = []
-        temporal_clusters = []
+        temporal_clusters = [
+            {
+                "cluster": f"{w['label']} ({w['primary_category']})",
+                "spend_share_pct": 33,
+                "category_focus": w['primary_category'],
+                "impulse_risk": w['risk_tier'],
+                "empirical_trigger": w['empirical_trigger']
+            }
+            for w in temporal_profile['peak_vulnerability_windows']
+        ]
         gnn_nodes = []
         gnn_edges = []
         typical_gateway = 7.20
@@ -205,6 +226,7 @@ def get_behavioral_graph_insights(user_id: str = "0"):
         "total_annual_contagion_burn": sum(h.get("annual_burn_impact", 0) for h in habit_loops),
         "habit_loops": habit_loops,
         "temporal_spend_clusters": temporal_clusters,
+        "temporal_density": temporal_profile,
         "summary": {
             "total_graph_nodes": len(merchant_stats) if merchant_stats else 42,
             "total_edges": 78,
@@ -219,3 +241,20 @@ def get_behavioral_graph_insights(user_id: str = "0"):
             "edges": gnn_edges
         }
     }
+
+
+@router.get("/temporal-density")
+def get_temporal_density(user_id: str = "0"):
+    """
+    Returns empirical 7-day x 24-hour spend density matrix, peak vulnerability windows,
+    and personalized trigger insights dynamically computed from the user's transaction ledger.
+    """
+    pipeline = UserDataPipeline.get_instance()
+    profiler = DynamicTemporalDensityProfiler(top_k_windows=3)
+    profile = profiler.profile_transactions(pipeline.raw_transactions)
+    return {
+        "status": "success",
+        "user_id": user_id,
+        **profile
+    }
+

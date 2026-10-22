@@ -33,12 +33,12 @@ export default function FeatureExplorer() {
   if (loading) {
     return (
       <div style={{
-        background: '#FFFFFF',
-        border: '1px solid #E2E8F0',
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-subtle)',
         borderRadius: '16px',
         padding: '32px',
         textAlign: 'center',
-        color: '#64748B'
+        color: 'var(--text-secondary)'
       }}>
         Calculating your personalized Money Health Score...
       </div>
@@ -55,12 +55,12 @@ export default function FeatureExplorer() {
 
   return (
     <div style={{
-      background: '#FFFFFF',
-      border: '1px solid #E2E8F0',
+      background: 'var(--bg-card)',
+      border: '1px solid var(--border-subtle)',
       borderRadius: '16px',
       padding: '28px',
-      boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
-      color: '#0F172A',
+      boxShadow: 'var(--shadow-card)',
+      color: 'var(--text-primary)',
       marginBottom: '24px'
     }}>
       {/* Header */}
@@ -229,7 +229,7 @@ export default function FeatureExplorer() {
                 <span style={{ fontSize: '0.86rem', fontWeight: 700, color: '#0D9488' }}>{p.score}%</span>
               </div>
               <div style={{ height: '6px', width: '100%', background: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
-                <div style={{ width: `${p.score}%`, height: '100%', background: '#0D9488', borderRadius: '3px' }} />
+                <div style={{ width: `${Math.min(Math.max(p.score || 0, 0), 100)}%`, height: '100%', background: '#0D9488', borderRadius: '3px' }} />
               </div>
               <p style={{ fontSize: '0.78rem', color: '#64748B', margin: 0, lineHeight: 1.4 }}>
                 {p.desc}

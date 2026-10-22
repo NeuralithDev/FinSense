@@ -149,11 +149,30 @@ def get_health_score(
             "debt_leverage": max(10, min(92, int((1 - dti) * 100))),
         }
 
+        # Deep Residual Persona MLP Classification
+        mlp_diag = None
+        try:
+            from src.models.persona_mlp import DeepPersonaMLP
+            from pathlib import Path
+            mlp_path = Path("models/trained/persona_mlp_user0.pt")
+            if mlp_path.exists():
+                mlp = DeepPersonaMLP.load_checkpoint(str(mlp_path))
+                savings_rate = max(0.0, (income - expenses) / max(1.0, income))
+                vec = np.array([
+                    savings_rate, dti, min(1.0, state.runway_months / 12.0), credit / 850.0,
+                    min(1.0, state.shock_ratio / 50.0), 0.25, min(1.0, expenses / max(1.0, income)),
+                    0.4, 0.7, 0.3, 0.5, 0.6
+                ], dtype=float)
+                mlp_diag = mlp.classify_profile(vec)
+        except Exception:
+            mlp_diag = None
+
         return {
             "user_id": user_id,
             "composite_score": round(state.health_score, 1),
             "health_tier": state.health_tier,
             "persona": state.persona,
+            "deep_persona_diagnostic": mlp_diag,
             "runway_months": round(state.runway_months, 1),
             "monthly_income": round(income, 2),
             "monthly_burn": round(expenses, 2),

@@ -27,7 +27,8 @@ export default function BankSyncModal() {
     uploadStatement,
     addTransaction,
     switchProfile,
-    accounts,
+    isCrisisDemoMode,
+    toggleCrisisDemoMode,
   } = useFinanceStore();
 
   const { currency, setCurrency } = useCurrency();
@@ -36,6 +37,9 @@ export default function BankSyncModal() {
   const [dragActive, setDragActive] = useState(false);
   const [fileContent, setFileContent] = useState('');
   const [fileName, setFileName] = useState('');
+  const [pdfPassword, setPdfPassword] = useState('');
+  const [accountType, setAccountType] = useState('checking'); // 'checking' | 'savings' | 'credit_card'
+  const [isPdf, setIsPdf] = useState(false);
   const [parsedPreview, setParsedPreview] = useState([]);
   const [detectedCount, setDetectedCount] = useState(0);
   const [detectedMeta, setDetectedMeta] = useState(null);
@@ -68,6 +72,30 @@ export default function BankSyncModal() {
   const processFile = (file) => {
     if (!file) return;
     setFileName(file.name);
+    const isFilePdf = file.name.toLowerCase().endsWith('.pdf');
+    setIsPdf(isFilePdf);
+
+    if (isFilePdf) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+        setFileContent(base64);
+        setDetectedMeta({
+          bank: 'Encrypted / E-Statement PDF',
+          holder: 'Account Holder',
+          mask: 'PDF',
+          currency: currency.code,
+        });
+        setDetectedCount('PDF Document Ready');
+        setParsedPreview([
+          { date: 'PDF Attached', merchant: file.name, amount: 'Protected E-Statement', isIncome: false },
+        ]);
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (e) => {
       const text = e.target.result;
@@ -98,6 +126,8 @@ export default function BankSyncModal() {
       setDetectedMeta({ bank, holder, mask, currency: currDetected });
       if (currDetected === 'INR' && currency.code !== 'INR') {
         setCurrency('INR');
+      } else if (currDetected === 'USD' && currency.code !== 'USD') {
+        setCurrency('USD');
       }
 
       // 2. Locate table header row
@@ -208,7 +238,10 @@ export default function BankSyncModal() {
     if (!fileContent) return;
     setIsProcessing(true);
     try {
-      await uploadStatement(fileContent, fileName);
+      const res = await uploadStatement(fileContent, fileName, pdfPassword, accountType);
+      if (res && res.currency && res.currency !== currency.code) {
+        setCurrency(res.currency);
+      }
       confetti({
         particleCount: 80,
         spread: 60,
@@ -427,6 +460,39 @@ export default function BankSyncModal() {
           {/* MODE A: UPLOAD STATEMENT */}
           {activeTab === 'upload' && (
             <div>
+              {/* Multi-Account Ingestion Target Selector */}
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
+                  Target Ingestion Account
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                  {[
+                    { id: 'checking', label: 'Checking Account' },
+                    { id: 'savings', label: 'Savings Reserve' },
+                    { id: 'credit_card', label: 'Credit Card' },
+                  ].map((acc) => (
+                    <button
+                      key={acc.id}
+                      type="button"
+                      onClick={() => setAccountType(acc.id)}
+                      style={{
+                        padding: '8px 10px',
+                        borderRadius: '8px',
+                        border: `1px solid ${accountType === acc.id ? '#10B981' : '#E2E8F0'}`,
+                        background: accountType === acc.id ? '#F0FDF4' : '#FFFFFF',
+                        color: accountType === acc.id ? '#047857' : '#475569',
+                        fontSize: '0.76rem',
+                        fontWeight: accountType === acc.id ? 700 : 500,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      {acc.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
@@ -436,7 +502,7 @@ export default function BankSyncModal() {
                 style={{
                   border: `2px dashed ${dragActive ? '#0D9488' : '#CBD5E1'}`,
                   borderRadius: '16px',
-                  padding: '36px 20px',
+                  padding: '32px 20px',
                   textAlign: 'center',
                   background: dragActive ? '#F0FDF4' : '#F8FAFC',
                   cursor: 'pointer',
@@ -447,7 +513,7 @@ export default function BankSyncModal() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".csv,.json,.txt"
+                  accept=".csv,.pdf,.json,.txt,application/pdf,text/csv"
                   onChange={handleFileChange}
                   style={{ display: 'none' }}
                 />
@@ -466,12 +532,41 @@ export default function BankSyncModal() {
                   <Upload size={22} />
                 </div>
                 <div style={{ fontSize: '0.94rem', fontWeight: 700, color: '#0F172A', marginBottom: '4px' }}>
-                  {fileName ? fileName : 'Drag & drop your bank statement (CSV or JSON)'}
+                  {fileName ? fileName : 'Drag & drop bank statement (CSV or PDF)'}
                 </div>
                 <p style={{ fontSize: '0.78rem', color: '#64748B', margin: 0 }}>
-                  Supports ICICI, HDFC, SBI, Axis, Kotak, Chase, Apple Card, or any standard export.
+                  Supports ICICI, HDFC, SBI, Axis, Kotak, Chase, Apple Card, or password-protected PDF e-statements.
                 </p>
               </div>
+
+              {/* Password field for PDF Statements */}
+              {(isPdf || fileName.toLowerCase().endsWith('.pdf')) && (
+                <div style={{
+                  background: '#F8FAFC',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  marginBottom: '16px',
+                }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+                    PDF Statement Password (Optional - for encrypted HDFC, ICICI, SBI, Axis, Chase e-statements)
+                  </label>
+                  <input
+                    type="password"
+                    value={pdfPassword}
+                    onChange={(e) => setPdfPassword(e.target.value)}
+                    placeholder="e.g. Your Date of Birth (DDMMYYYY) or PAN"
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '0.82rem',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+              )}
 
               {/* Sample Quick-Load Pill */}
               <div style={{
@@ -551,7 +646,7 @@ export default function BankSyncModal() {
                     justifyContent: 'space-between',
                   }}>
                     <span>Detected Transactions & Sample Rows</span>
-                    <span>Ready for data_cleaning.py</span>
+                    <span>Ready for Ingestion Pipeline</span>
                   </div>
                   {parsedPreview.map((r, idx) => (
                     <div
@@ -886,6 +981,54 @@ export default function BankSyncModal() {
                     </div>
                   );
                 })}
+              </div>
+
+              {/* Overspent / Crisis State Stress Test Toggle */}
+              <div style={{
+                marginTop: '16px',
+                padding: '16px',
+                borderRadius: '12px',
+                background: isCrisisDemoMode ? 'rgba(239, 68, 68, 0.08)' : '#F8FAFC',
+                border: `1px solid ${isCrisisDemoMode ? 'rgba(239, 68, 68, 0.25)' : '#E2E8F0'}`,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '12px',
+              }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <strong style={{ fontSize: '0.88rem', color: isCrisisDemoMode ? '#EF4444' : '#0F172A' }}>
+                      {isCrisisDemoMode ? '🚨 Overspent / Crisis State Active' : '🟢 Realistic Student Baseline'}
+                    </strong>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: isCrisisDemoMode ? '#EF4444' : '#10B981', color: '#FFFFFF' }}>
+                      {isCrisisDemoMode ? '132% of Budget' : '67.5% Paced'}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '0.78rem', color: '#64748B', margin: '4px 0 0 0', maxWidth: '440px' }}>
+                    {isCrisisDemoMode
+                      ? 'Simulates spending ₹18,500 by Day 21 (over monthly target). Activates Constrained / Recovery Mode across Safe-to-Spend and daily cutback recommendations.'
+                      : 'Default INR benchmark: ₹9,450 spent by Day 21 (on track with ₹14,000 target budget).'}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={toggleCrisisDemoMode}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: '8px',
+                    background: isCrisisDemoMode ? '#EF4444' : '#0F172A',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {isCrisisDemoMode ? 'Reset to Baseline' : 'Simulate Overspent State'}
+                </button>
               </div>
             </div>
           )}

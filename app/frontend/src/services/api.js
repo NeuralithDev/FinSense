@@ -3,7 +3,8 @@
  * Communicates with FastAPI backend (/api/...) with institutional data fallbacks.
  */
 
-const API_BASE = '/api';
+const API_BASE = (import.meta.env?.VITE_API_URL || '').replace(/\/$/, '') + '/api';
+
 
 export async function fetchHealthScore(userId = '0', scenario = 'baseline') {
   try {
@@ -753,13 +754,48 @@ export async function fetchLiveLedger() {
   }
 }
 
-export async function uploadStatementCSV(content, file_type = 'csv') {
+export async function fetch3DPeerGalaxy(userId = '0') {
+  try {
+    const res = await fetch(`${API_BASE}/twins/galaxy_3d?user_id=${userId}`);
+    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn('Falling back to local 3D galaxy:', err.message);
+    return null;
+  }
+}
+
+export async function simulatePeerClimb(additionalSavingsMonthly = 150.0, userId = '0') {
+  const res = await fetch(`${API_BASE}/twins/simulate_climb`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ additional_savings_monthly: additionalSavingsMonthly, user_id: userId })
+  });
+  if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+  return await res.json();
+}
+
+export async function fetchAggregatedAccounts() {
+  try {
+    const res = await fetch(`${API_BASE}/ingestion/accounts`);
+    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn('Falling back to default accounts summary:', err.message);
+    return null;
+  }
+}
+
+export async function uploadStatementCSV(content, file_type = 'csv', password = null, account_type = 'checking') {
   const res = await fetch(`${API_BASE}/ingestion/upload`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content, file_type })
+    body: JSON.stringify({ content, file_type, password, account_type })
   });
-  if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || `HTTP error ${res.status}`);
+  }
   return await res.json();
 }
 
@@ -931,11 +967,23 @@ export async function fetchRecommendations(userId = '0') {
   }
 }
 
+export async function fetchTemporalDensity(userId = '0') {
+  try {
+    const res = await fetch(`${API_BASE}/graph/temporal-density?user_id=${userId}`);
+    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn('Falling back to local temporal profiler:', err.message);
+    return null;
+  }
+}
+
 export async function fetchGraphContagion(userId = '0') {
   try {
     const res = await fetch(`${API_BASE}/graph/contagion?user_id=${userId}`);
     if (!res.ok) throw new Error(`HTTP error ${res.status}`);
     return await res.json();
+
   } catch (err) {
     return {
       primary_habits: [

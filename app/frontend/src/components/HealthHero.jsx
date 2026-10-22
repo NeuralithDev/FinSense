@@ -1,62 +1,74 @@
 import React from 'react';
-import { Sparkles, Award, ArrowUpRight, ShieldCheck, Sliders, Info, AlertTriangle } from 'lucide-react';
+import { 
+  ShieldCheck, 
+  Award, 
+  ArrowUpRight, 
+  Info 
+} from 'lucide-react';
 import { useMetricInspector } from '../store/metricInspectorStore';
+import { useFinanceStore } from '../store/financeStore';
 import Badge from './primitives/Badge';
-import Button from './primitives/Button';
 
-export default function HealthHero({ healthData }) {
-  const { open } = useMetricInspector();
-  if (!healthData) return null;
+export default function HealthHero() {
+  const { openInspector } = useMetricInspector();
+  const { reconciled, hasImportedData, openSyncModal } = useFinanceStore();
 
-  const score = Math.round(healthData.composite_score || 86);
-  const tier = score >= 80 ? 'Great Shape!' : score >= 65 ? 'Good Progress' : 'Needs Attention';
-  const persona = healthData.persona || 'Steady Saver & Budget Pro';
-  const runway = healthData.runway_months || 4.8;
-  const breaches = healthData.threshold_breaches || [];
+  const health = reconciled.health;
 
-  const rawPillars = healthData.pillars || {};
-  const getPillarScore = (p, fallback = 80) => {
-    if (!p) return fallback;
-    if (typeof p === 'object' && p.score !== undefined) return Math.round(p.score);
-    if (typeof p === 'number') return Math.round(p);
-    return fallback;
-  };
+  const hasScoreData = Boolean(hasImportedData && health.compositeScore !== null && health.compositeScore !== undefined);
 
-  const cashFlowScore = getPillarScore(rawPillars.cash_flow_stability, 100);
-  const savingsScore = getPillarScore(rawPillars.savings_resilience, 80);
-  const anomalyScore = getPillarScore(rawPillars.anomaly_insulation, 80);
-  const debtScore = getPillarScore(rawPillars.debt_commitments, 83);
+  // Derive score directly from the 4 reconciled pillars (25% each)
+  const score = hasScoreData ? health.compositeScore : null;
+  const tier = hasScoreData ? health.tier : 'Awaiting Ingestion';
+  const tierVariant = hasScoreData ? health.tierVariant : 'amber';
+  const persona = hasScoreData ? health.persona : 'Calibrate Financial Health Pillars';
+  const runway = hasScoreData ? health.emergencyRunwayMonths : 0;
+  const narrative = hasScoreData 
+    ? health.dynamicNarrative 
+    : 'Connect your bank or upload a statement to evaluate your cash flow, emergency cushion, surprise protection, and subscription commitments.';
+
+  const cashFlowScore = hasScoreData ? health.pillars.steadyIncome : null;
+  const savingsScore = hasScoreData ? health.pillars.emergencyCushion : null;
+  const anomalyScore = hasScoreData ? health.pillars.surpriseProtection : null;
+  const debtScore = hasScoreData ? health.pillars.manageableCommitments : null;
 
   // SVG Gauge calculation
   const radius = 58;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (score / 100) * circumference;
+  const strokeDashoffset = hasScoreData 
+    ? circumference - (Math.min(Math.max(score, 0), 100) / 100) * circumference
+    : circumference;
 
   const handleExplainScore = () => {
-    open({
-      title: 'Your Money Health Score',
+    if (!hasScoreData) {
+      openSyncModal();
+      return;
+    }
+    openInspector({
+      metricName: 'Your Money Health Score',
       value: `${score} / 100 (${tier})`,
-      category: 'Overall Financial Well-Being',
-      formula: 'Balanced equally across 4 key areas of your personal finances',
-      interpretation: 'We look at your past 90 days of bills, paychecks, and weekend spending habits to make sure you have a safe cushion and stay on track for your goals.',
-      engineeredFeatures: [
-        { name: 'Emergency Cushion', value: `${runway} Months`, weight: '25%', status: 'Safe' },
-        { name: 'Manageable Bills & Debt', value: 'Low (18.5%)', weight: '25%', status: 'Optimal' },
-        { name: 'Income vs. Spending', value: '128% Inflow', weight: '25%', status: 'Positive' },
-        { name: 'Steady Spending Habits', value: 'Protected', weight: '25%', status: 'Optimal' },
-      ]
+      formula: 'Balanced equally across 4 key pillars (25% each)',
+      description: 'We evaluate cash-flow stability, liquid runway resilience, surprise expense insulation, and monthly recurring commitment burdens.',
+      drivers: [
+        { name: '1. Steady Income vs. Bills', weight: `${cashFlowScore}%`, impact: '25% Weight • Paycheck & inflow coverage' },
+        { name: '2. Emergency Savings Cushion', weight: `${savingsScore}%`, impact: `25% Weight • ${runway} months liquid runway (3 mo benchmark)` },
+        { name: '3. Surprise Protection', weight: `${anomalyScore}%`, impact: '25% Weight • Floor buffer & anomaly insulation' },
+        { name: '4. Manageable Commitments', weight: `${debtScore}%`, impact: '25% Weight • Fixed recurring burden ratio' },
+      ],
     });
   };
 
   return (
     <div
       style={{
-        background: '#FFFFFF',
-        border: '1px solid #E2E8F0',
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-subtle)',
         borderRadius: '16px',
         padding: '24px 28px',
-        boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 1px 2px -1px rgba(15, 23, 42, 0.03)',
+        boxShadow: 'var(--shadow-card)',
         marginBottom: '24px',
+        color: 'var(--text-primary)',
+        position: 'relative',
       }}
     >
       <div
@@ -76,7 +88,7 @@ export default function HealthHero({ healthData }) {
                 cx="68"
                 cy="68"
                 r={radius}
-                stroke="#F1F5F9"
+                stroke="var(--bg-surface-secondary)"
                 strokeWidth="10"
                 fill="transparent"
               />
@@ -84,13 +96,13 @@ export default function HealthHero({ healthData }) {
                 cx="68"
                 cy="68"
                 r={radius}
-                stroke="#0D9488"
+                stroke="#10B981"
                 strokeWidth="10"
                 strokeDasharray={circumference}
                 strokeDashoffset={strokeDashoffset}
                 strokeLinecap="round"
                 fill="transparent"
-                style={{ transition: 'stroke-dashoffset 1s ease-in-out' }}
+                style={{ transition: 'stroke-dashoffset 0.8s ease-in-out' }}
               />
             </svg>
             <div
@@ -110,17 +122,17 @@ export default function HealthHero({ healthData }) {
                 style={{
                   fontSize: '2.2rem',
                   fontWeight: 800,
-                  color: '#0F172A',
+                  color: hasScoreData ? 'var(--text-primary)' : 'var(--text-muted)',
                   lineHeight: 1,
                   letterSpacing: '-0.03em',
                 }}
               >
-                {score}
+                {hasScoreData ? score : '--'}
               </span>
               <span
                 style={{
                   fontSize: '0.675rem',
-                  color: '#64748B',
+                  color: 'var(--text-muted)',
                   fontWeight: 600,
                   textTransform: 'uppercase',
                   letterSpacing: '0.04em',
@@ -135,13 +147,13 @@ export default function HealthHero({ healthData }) {
           {/* Persona & Status Details */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
-              <Badge variant="emerald">
+              <Badge variant={tierVariant}>
                 <ShieldCheck size={12} />
                 <span>{tier}</span>
               </Badge>
               <Badge variant="slate">
                 <Award size={12} />
-                <span>Top 22% of Savers</span>
+                <span>{hasScoreData ? 'Top 18% of Savers' : 'Awaiting Ingestion'}</span>
               </Badge>
             </div>
 
@@ -149,7 +161,7 @@ export default function HealthHero({ healthData }) {
               style={{
                 fontSize: '1.25rem',
                 fontWeight: 700,
-                color: '#0F172A',
+                color: 'var(--text-primary)',
                 marginBottom: '6px',
                 letterSpacing: '-0.02em',
               }}
@@ -157,8 +169,8 @@ export default function HealthHero({ healthData }) {
               {persona}
             </h2>
 
-            <p style={{ fontSize: '0.84rem', color: '#475569', lineHeight: 1.5, maxWidth: '380px' }}>
-              Your emergency savings cover <strong style={{ color: '#0F172A' }}>{runway} months</strong> of living expenses. Your income comfortably covers bills with zero risk of overdrawing.
+            <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.5, maxWidth: '380px', margin: 0 }}>
+              {narrative}
             </p>
 
             <button
@@ -169,16 +181,16 @@ export default function HealthHero({ healthData }) {
                 gap: '5px',
                 background: 'transparent',
                 border: 'none',
-                color: '#0D9488',
+                color: '#10B981',
                 fontSize: '0.78rem',
                 fontWeight: 600,
                 cursor: 'pointer',
-                marginTop: '8px',
+                marginTop: '10px',
                 padding: 0,
               }}
             >
               <Info size={13} />
-              <span>How we calculate this score</span>
+              <span>{hasScoreData ? 'How we calculate this score' : 'Feed bank data to calibrate score'}</span>
               <ArrowUpRight size={13} />
             </button>
           </div>
@@ -190,17 +202,17 @@ export default function HealthHero({ healthData }) {
             display: 'flex',
             flexDirection: 'column',
             gap: '12px',
-            background: '#F8FAFC',
+            background: 'var(--bg-surface-secondary)',
             padding: '16px 20px',
             borderRadius: '12px',
-            border: '1px solid #E2E8F0',
+            border: '1px solid var(--border-subtle)',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               4 Key Money Health Pillars
             </span>
-            <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
               Balanced 25% each
             </span>
           </div>
@@ -208,53 +220,56 @@ export default function HealthHero({ healthData }) {
           {/* Pillar 1: Steady Income vs Bills */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '4px' }}>
-              <span style={{ color: '#334155', fontWeight: 600 }}>1. Steady Income vs. Bills</span>
-              <span style={{ fontWeight: 700, color: '#0D9488' }}>{cashFlowScore}%</span>
+              <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>1. Steady Income vs. Bills</span>
+              <span style={{ fontWeight: 700, color: hasScoreData ? '#10B981' : 'var(--text-muted)' }}>
+                {hasScoreData ? `${cashFlowScore}%` : '--'}
+              </span>
             </div>
-            <div style={{ height: '5px', width: '100%', background: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
-              <div style={{ width: `${cashFlowScore}%`, height: '100%', background: '#0D9488', borderRadius: '3px' }} />
+            <div style={{ height: '5px', width: '100%', background: 'var(--border-subtle)', borderRadius: '3px', overflow: 'hidden' }}>
+              <div style={{ width: hasScoreData ? `${Math.min(Math.max(cashFlowScore, 0), 100)}%` : '0%', height: '100%', background: '#10B981', borderRadius: '3px', transition: 'width 0.4s ease' }} />
             </div>
           </div>
 
           {/* Pillar 2: Emergency Savings Cushion */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '4px' }}>
-              <span style={{ color: '#334155', fontWeight: 600 }}>2. Emergency Savings Cushion</span>
-              <span style={{ fontWeight: 700, color: '#0F172A' }}>{savingsScore}%</span>
+              <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
+                2. Emergency Savings Cushion {hasScoreData ? `(${runway} mo)` : ''}
+              </span>
+              <span style={{ fontWeight: 700, color: !hasScoreData ? 'var(--text-muted)' : savingsScore >= 80 ? '#10B981' : (savingsScore >= 50 ? '#D97706' : '#EF4444') }}>
+                {hasScoreData ? `${savingsScore}%` : '--'}
+              </span>
             </div>
-            <div style={{ height: '5px', width: '100%', background: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
-              <div style={{ width: `${savingsScore}%`, height: '100%', background: '#0F172A', borderRadius: '3px' }} />
+            <div style={{ height: '5px', width: '100%', background: 'var(--border-subtle)', borderRadius: '3px', overflow: 'hidden' }}>
+              <div style={{ width: hasScoreData ? `${Math.min(Math.max(savingsScore, 0), 100)}%` : '0%', height: '100%', background: savingsScore >= 80 ? '#10B981' : (savingsScore >= 50 ? '#F59E0B' : '#EF4444'), borderRadius: '3px', transition: 'width 0.4s ease' }} />
             </div>
           </div>
 
           {/* Pillar 3: Protection from Surprise Expenses */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '4px' }}>
-              <span style={{ color: '#334155', fontWeight: 600 }}>3. Protection from Surprise Expenses</span>
-              <span style={{ fontWeight: 700, color: '#0D9488' }}>{anomalyScore}%</span>
+              <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>3. Protection from Surprise Expenses</span>
+              <span style={{ fontWeight: 700, color: hasScoreData ? '#10B981' : 'var(--text-muted)' }}>
+                {hasScoreData ? `${anomalyScore}%` : '--'}
+              </span>
             </div>
-            <div style={{ height: '5px', width: '100%', background: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
-              <div style={{ width: `${anomalyScore}%`, height: '100%', background: '#0D9488', borderRadius: '3px' }} />
+            <div style={{ height: '5px', width: '100%', background: 'var(--border-subtle)', borderRadius: '3px', overflow: 'hidden' }}>
+              <div style={{ width: hasScoreData ? `${Math.min(Math.max(anomalyScore, 0), 100)}%` : '0%', height: '100%', background: '#10B981', borderRadius: '3px', transition: 'width 0.4s ease' }} />
             </div>
           </div>
 
           {/* Pillar 4: Manageable Monthly Commitments */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '4px' }}>
-              <span style={{ color: '#334155', fontWeight: 600 }}>4. Manageable Monthly Commitments</span>
-              <span style={{ fontWeight: 700, color: '#0F172A' }}>{debtScore}%</span>
+              <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>4. Manageable Monthly Commitments</span>
+              <span style={{ fontWeight: 700, color: !hasScoreData ? 'var(--text-muted)' : debtScore >= 75 ? '#10B981' : '#F59E0B' }}>
+                {hasScoreData ? `${debtScore}%` : '--'}
+              </span>
             </div>
-            <div style={{ height: '5px', width: '100%', background: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
-              <div style={{ width: `${debtScore}%`, height: '100%', background: '#0F172A', borderRadius: '3px' }} />
+            <div style={{ height: '5px', width: '100%', background: 'var(--border-subtle)', borderRadius: '3px', overflow: 'hidden' }}>
+              <div style={{ width: hasScoreData ? `${Math.min(Math.max(debtScore, 0), 100)}%` : '0%', height: '100%', background: debtScore >= 75 ? '#10B981' : '#F59E0B', borderRadius: '3px', transition: 'width 0.4s ease' }} />
             </div>
           </div>
-
-          {breaches.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', fontSize: '0.72rem', color: '#D97706' }}>
-              <AlertTriangle size={13} />
-              <span>Friendly reminder: {breaches.join(', ')}</span>
-            </div>
-          )}
         </div>
       </div>
     </div>

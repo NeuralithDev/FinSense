@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  finsense:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: finsense_app
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - DATABASE_URL=sqlite:///data/finsense_prod.db
+      - PYTHONPATH=/app
+      - LOG_LEVEL=INFO
+    volumes:
+      - finsense_data:/app/data
+      - finsense_models:/app/models/trained
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  finsense_data:
+    driver: local
+  finsense_models:
+    driver: local

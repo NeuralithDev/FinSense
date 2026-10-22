@@ -7,12 +7,12 @@ import SocialProofStrip from './components/landing/SocialProofStrip';
 import ScrollStory from './components/landing/ScrollStory';
 import FinalCTA from './components/landing/FinalCTA';
 import Footer from './components/landing/Footer';
-import CustomCursor from './components/primitives/CustomCursor';
 import AuthScreen from './components/auth/AuthScreen';
 import BehavioralQuestionnaire from './components/onboarding/BehavioralQuestionnaire';
 
 // Executive Cockpit Views & Shell
 import AppShell from './components/layout/AppShell';
+import SafeToSpendHero from './components/SafeToSpendHero';
 import HealthHero from './components/HealthHero';
 import ForecastHorizon from './components/ForecastHorizon';
 import AutopilotHub from './components/AutopilotHub';
@@ -25,7 +25,8 @@ import AnomalyGuardModule from './components/AnomalyGuardModule';
 import BehavioralSpendGraph from './components/BehavioralSpendGraph';
 import FeatureExplorer from './components/FeatureExplorer';
 import RecentActivityLedger from './components/RecentActivityLedger';
-import BankSyncModal from './components/modals/BankSyncModal';
+import ConnectBankModal from './components/ConnectBankModal';
+import BankOnboardingBanner from './components/onboarding/BankOnboardingBanner';
 import { useFinanceStore } from './store/financeStore';
 
 import { 
@@ -124,10 +125,8 @@ export default function App() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', position: 'relative', background: '#F8FAFC' }}>
-      <CustomCursor />
-      
       {/* Global Bank Sync & Ingestion Modal */}
-      <BankSyncModal />
+      <ConnectBankModal />
 
       {/* Floating Cockpit Switcher on Landing Page Only (Never overlap cockpit) */}
       {viewMode === 'landing' && (
@@ -173,7 +172,13 @@ export default function App() {
         <AuthScreen
           initialMode={authInitialMode}
           onBack={() => setViewMode('landing')}
-          onSuccess={() => setViewMode('onboarding')}
+          onSuccess={(opts) => {
+            if (opts?.bypassOnboarding) {
+              setViewMode('cockpit');
+            } else {
+              setViewMode('onboarding');
+            }
+          }}
         />
       ) : viewMode === 'onboarding' ? (
         /* VIEW 2: BEHAVIORAL QUESTIONNAIRE ONBOARDING */
@@ -225,6 +230,8 @@ export default function App() {
             >
               {activeTab === 'cockpit' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  <BankOnboardingBanner />
+                  <SafeToSpendHero />
                   <HealthHero healthData={healthData} />
                   <RecentActivityLedger />
                   <ForecastHorizon

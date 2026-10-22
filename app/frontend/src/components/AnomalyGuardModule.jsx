@@ -59,25 +59,30 @@ export default function AnomalyGuardModule() {
   if (loading) {
     return (
       <div style={{
-        background: '#FFFFFF',
-        border: '1px solid #E2E8F0',
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-subtle)',
         borderRadius: '16px',
         padding: '32px',
         textAlign: 'center',
-        color: '#64748B'
+        color: 'var(--text-secondary)'
       }}>
         Scanning recent transactions for unusual activity or surprise charges...
       </div>
     );
   }
 
-  const rawList = data?.anomalies || data?.dual_engine_detected || [];
-  const dualDetected = data?.anomalies 
-    ? data.anomalies.filter(a => a.consensus_tier === 'TIER_1_CONSENSUS' || a.severity === 'CRITICAL' || a.severity === 'HIGH') 
-    : (data?.dual_engine_detected || []);
-  const watchlist = data?.anomalies 
-    ? data.anomalies.filter(a => a.consensus_tier === 'TIER_2_WATCHLIST' || a.severity === 'MODERATE' || a.severity === 'LOW') 
-    : (data?.watchlist || []);
+  const rawList = (data?.anomalies && data.anomalies.length > 0)
+    ? data.anomalies
+    : (data?.dual_engine_detected && data.dual_engine_detected.length > 0)
+      ? data.dual_engine_detected
+      : (storeAnomalies || []);
+
+  const dualDetected = rawList.filter(
+    (a) => a.consensus_tier === 'TIER_1_CONSENSUS' || a.severity === 'CRITICAL' || a.severity === 'HIGH'
+  );
+  const watchlist = rawList.filter(
+    (a) => a.consensus_tier === 'TIER_2_WATCHLIST' || a.severity === 'MODERATE' || a.severity === 'LOW'
+  );
 
   const displayItems = filterMode === 'CRITICAL' 
     ? dualDetected 
@@ -87,12 +92,12 @@ export default function AnomalyGuardModule() {
 
   return (
     <div style={{
-      background: '#FFFFFF',
-      border: '1px solid #E2E8F0',
+      background: 'var(--bg-card)',
+      border: '1px solid var(--border-subtle)',
       borderRadius: '16px',
       padding: '24px',
-      boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
-      color: '#0F172A',
+      boxShadow: 'var(--shadow-card)',
+      color: 'var(--text-primary)',
       marginBottom: '24px'
     }}>
       {/* Header */}
@@ -102,7 +107,7 @@ export default function AnomalyGuardModule() {
         alignItems: 'flex-start',
         flexWrap: 'wrap',
         gap: '16px',
-        borderBottom: '1px solid #F1F5F9',
+        borderBottom: '1px solid var(--border-subtle)',
         paddingBottom: '20px',
         marginBottom: '24px'
       }}>
@@ -112,16 +117,16 @@ export default function AnomalyGuardModule() {
               width: '32px',
               height: '32px',
               borderRadius: '8px',
-              background: '#FFF1F2',
-              border: '1px solid #FECDD3',
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1px solid rgba(239, 68, 68, 0.25)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#E11D48'
+              color: '#EF4444'
             }}>
               <ShieldAlert size={18} />
             </div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, letterSpacing: '-0.02em', color: '#0F172A' }}>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
               Unusual Activity & Bill Guard
             </h3>
             <span style={{
@@ -129,14 +134,14 @@ export default function AnomalyGuardModule() {
               fontWeight: 700,
               padding: '3px 8px',
               borderRadius: '6px',
-              background: '#F0FDF4',
-              color: '#0D9488',
-              border: '1px solid #BBF7D0'
+              background: 'rgba(16, 185, 129, 0.12)',
+              color: '#10B981',
+              border: '1px solid rgba(16, 185, 129, 0.25)'
             }}>
               Active Protection
             </span>
           </div>
-          <p style={{ fontSize: '0.86rem', color: '#64748B', margin: 0, maxWidth: '720px', lineHeight: 1.5 }}>
+          <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)', margin: 0, maxWidth: '720px', lineHeight: 1.5 }}>
             FinSense automatically flags surprise spikes, price increases, and unexpected charges so you can confirm or dispute them before they hurt your budget.
           </p>
         </div>

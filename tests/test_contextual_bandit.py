@@ -48,6 +48,7 @@ def test_thompson_sampling_selection_and_ranking():
 
 
 def test_epsilon_greedy_selection():
+    from src.models.contextual_bandit import EpsilonGreedyContextualBandit
     bandit = EpsilonGreedyContextualBandit(num_arms=3, context_dim=4, epsilon=0.2)
     context = np.array([0.5, 0.5, 0.5, 0.5])
     arm, rewards = bandit.select_arm(context)
@@ -55,8 +56,32 @@ def test_epsilon_greedy_selection():
     bandit.update(arm, context, reward=0.8)
 
 
+def test_deep_contextual_bandit_net():
+    from src.models.contextual_bandit import DeepContextualBanditNet
+    import torch
+    
+    num_arms = 4
+    context_dim = 5
+    bnet = DeepContextualBanditNet(context_dim=context_dim, num_arms=num_arms, hidden_dim=32)
+    
+    context = np.array([0.5, 0.2, 0.8, 0.1, 0.4])
+    arm, scores = bnet.select_arm(context, epsilon=0.0)
+    assert 0 <= arm < num_arms
+    assert len(scores) == num_arms
+    
+    ranked = bnet.rank_arms(context)
+    assert len(ranked) == num_arms
+    assert set(ranked) == set(range(num_arms))
+    
+    optimizer = torch.optim.Adam(bnet.parameters(), lr=0.01)
+    loss = bnet.train_step(context, arm=1, reward=1.0, optimizer=optimizer)
+    assert isinstance(loss, float)
+
+
 if __name__ == "__main__":
     test_linucb_learning_convergence()
     test_thompson_sampling_selection_and_ranking()
     test_epsilon_greedy_selection()
+    test_deep_contextual_bandit_net()
     print("ALL CONTEXTUAL BANDIT TESTS PASSED!")
+

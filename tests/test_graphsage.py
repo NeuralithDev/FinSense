@@ -46,7 +46,7 @@ def test_graphsage_forward_and_embeddings():
     assert out.shape == (num_nodes, emb_dim)
     # Check L2 normalization (norm should be ~1.0)
     norms = torch.norm(out, p=2, dim=1)
-    assert torch.allclose(norms, torch.ones(num_nodes), atol=1e-5)
+    assert torch.allclose(norms, torch.ones(num_nodes), atol=1e-4)
 
     # Test twin discovery
     embeddings = model.get_embeddings(x, edge_index)

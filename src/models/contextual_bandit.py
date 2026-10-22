@@ -14,6 +14,13 @@ Algorithms implemented:
 
 from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
+try:
+    import torch
+    import torch.nn as nn
+except ImportError:
+    torch = None
+    nn = None
+
 
 
 class LinUCB:
@@ -148,3 +155,119 @@ class EpsilonGreedyContextualBandit:
         x = np.asarray(context, dtype=np.float64).reshape(-1, 1)
         self.A[arm] += x @ x.T
         self.b[arm] += reward * x
+
+
+class DeepContextualBanditNet(nn.Module if nn is not None else object):
+    """
+    Deep Neural Contextual Bandit (Reward Network) in PyTorch.
+    
+    Approximates the non-linear value function Q(context, arm) mapping user financial
+    features (DTI, buffer runway, health score, spending velocity) to expected recommendation
+    conversion reward across all personalized financial intervention arms.
+    """
+    def __init__(
+        self,
+        context_dim: int = 5,
+        num_arms: int = 4,
+        hidden_dim: int = 64,
+        dropout: float = 0.1
+    ):
+        import torch
+        import torch.nn as nn
+        super().__init__()
+        self.context_dim = context_dim
+        self.num_arms = num_arms
+        self.hidden_dim = hidden_dim
+
+        self.net = nn.Sequential(
+            nn.Linear(context_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.LeakyReLU(0.2),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.LayerNorm(hidden_dim // 2),
+            nn.LeakyReLU(0.2),
+            nn.Linear(hidden_dim // 2, num_arms)
+        )
+
+        self.loss_fn = nn.SmoothL1Loss()
+
+    def forward(self, x: "torch.Tensor") -> "torch.Tensor":
+        """
+        Forward pass producing predicted rewards across all arms for given contexts.
+        """
+        return self.net(x)
+
+    def select_arm(
+        self,
+        context: np.ndarray,
+        epsilon: float = 0.05
+    ) -> Tuple[int, np.ndarray]:
+        """
+        Infers expected arm rewards with epsilon-greedy exploration.
+        """
+        import torch
+        self.eval()
+        with torch.no_grad():
+            x = torch.tensor(context, dtype=torch.float32).unsqueeze(0)
+            scores = self(x).squeeze(0).cpu().numpy()
+
+        if np.random.random() < epsilon:
+            best_arm = int(np.random.randint(self.num_arms))
+        else:
+            best_arm = int(np.argmax(scores))
+
+        return best_arm, scores
+
+    def rank_arms(self, context: np.ndarray) -> List[int]:
+        """
+        Ranks arms by descending predicted reward value.
+        """
+        _, scores = self.select_arm(context, epsilon=0.0)
+        return list(np.argsort(-scores))
+
+    def train_step(
+        self,
+        context: np.ndarray,
+        arm: int,
+        reward: float,
+        optimizer: Any
+    ) -> float:
+        """
+        Online gradient descent update step for selected arm reward.
+        """
+        import torch
+        self.train()
+        x = torch.tensor(context, dtype=torch.float32).unsqueeze(0)
+        y_target = self(x).detach().clone()
+        y_target[0, arm] = reward
+
+        optimizer.zero_grad()
+        preds = self(x)
+        loss = self.loss_fn(preds, y_target)
+        loss.backward()
+        optimizer.step()
+        return float(loss.item())
+
+    def save_checkpoint(self, path: str) -> None:
+        import torch
+        torch.save({
+            "model_state_dict": self.state_dict(),
+            "context_dim": self.context_dim,
+            "num_arms": self.num_arms,
+            "hidden_dim": self.hidden_dim
+        }, path)
+
+    @classmethod
+    def load_checkpoint(cls, path: str, device: str = "cpu") -> "DeepContextualBanditNet":
+        import torch
+        ckpt = torch.load(path, map_location=device, weights_only=False)
+        model = cls(
+            context_dim=ckpt.get("context_dim", 5),
+            num_arms=ckpt.get("num_arms", 4),
+            hidden_dim=ckpt.get("hidden_dim", 64)
+        )
+        model.load_state_dict(ckpt["model_state_dict"])
+        model.eval()
+        return model
+

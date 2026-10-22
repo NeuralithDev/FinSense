@@ -23,11 +23,14 @@ function notify() {
   authListeners.forEach((fn) => fn(currentUser));
 }
 
-export function loginUser({ email, password }) {
+export function loginUser({ email, password, name, avatar, provider = 'credentials' }) {
+  const derivedName = name || (email ? email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (s) => s.toUpperCase()) : 'FinSense User');
   const user = {
-    id: 'user_001',
+    id: 'user_' + Math.random().toString(36).substr(2, 9),
     email,
-    name: email.split('@')[0].replace('.', ' ').replace(/^./, (s) => s.toUpperCase()),
+    name: derivedName,
+    avatar: avatar || null,
+    provider,
     persona: 'Discretionary Builder',
     tier: 'PRO',
     authenticatedAt: new Date().toISOString(),
@@ -35,16 +38,22 @@ export function loginUser({ email, password }) {
   currentUser = user;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('finsense_auth_changed', { detail: user }));
+    }
   } catch (e) {}
   notify();
   return user;
 }
 
-export function signupUser({ name, email, password }) {
+export function signupUser({ name, email, password, avatar, provider = 'credentials' }) {
+  const derivedName = name || (email ? email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (s) => s.toUpperCase()) : 'New Explorer');
   const user = {
     id: 'user_' + Math.random().toString(36).substr(2, 9),
     email,
-    name: name || email.split('@')[0],
+    name: derivedName,
+    avatar: avatar || null,
+    provider,
     persona: 'New Explorer',
     tier: 'EARLY_ACCESS_BETA',
     authenticatedAt: new Date().toISOString(),
@@ -52,6 +61,9 @@ export function signupUser({ name, email, password }) {
   currentUser = user;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('finsense_auth_changed', { detail: user }));
+    }
   } catch (e) {}
   notify();
   return user;
@@ -61,6 +73,9 @@ export function logoutUser() {
   currentUser = null;
   try {
     localStorage.removeItem(STORAGE_KEY);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('finsense_auth_changed', { detail: null }));
+    }
   } catch (e) {}
   notify();
 }

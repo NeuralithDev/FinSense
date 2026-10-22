@@ -210,12 +210,12 @@ export default function AutopilotHub({ autopilotData, onSweepExecuted }) {
 
   return (
     <div style={{
-      background: '#FFFFFF',
-      border: '1px solid #E2E8F0',
+      background: 'var(--bg-card)',
+      border: '1px solid var(--border-subtle)',
       borderRadius: '16px',
       padding: '24px',
-      boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
-      color: '#0F172A',
+      boxShadow: 'var(--shadow-card)',
+      color: 'var(--text-primary)',
       marginBottom: '24px'
     }}>
       {/* Header Bar */}
@@ -225,7 +225,7 @@ export default function AutopilotHub({ autopilotData, onSweepExecuted }) {
         alignItems: 'flex-start',
         flexWrap: 'wrap',
         gap: '16px',
-        borderBottom: '1px solid #F1F5F9',
+        borderBottom: '1px solid var(--border-subtle)',
         paddingBottom: '20px',
         marginBottom: '24px'
       }}>
@@ -235,8 +235,8 @@ export default function AutopilotHub({ autopilotData, onSweepExecuted }) {
               width: '32px',
               height: '32px',
               borderRadius: '8px',
-              background: '#F0FDF4',
-              border: '1px solid #DCFCE7',
+              background: 'rgba(13, 148, 136, 0.12)',
+              border: '1px solid rgba(13, 148, 136, 0.25)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -651,7 +651,7 @@ export default function AutopilotHub({ autopilotData, onSweepExecuted }) {
               <div style={{ width: '100%', height: '6px', background: '#E2E8F0', borderRadius: '4px', overflow: 'hidden', margin: '8px 0 4px 0' }}>
                 <div 
                   style={{
-                    width: `${goal.progressPct}%`,
+                    width: `${Math.min(Math.max(goal.progressPct, 0), 100)}%`,
                     height: '100%',
                     background: '#0D9488',
                     borderRadius: '4px',

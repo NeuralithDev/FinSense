@@ -1,6 +1,7 @@
 /**
  * Scenario State Management Store
  * Manages global macroeconomic and personal financial stress scenarios.
+ * Connects directly to the Unified Finance Engine.
  */
 
 import { useState, useEffect } from 'react';
@@ -10,29 +11,28 @@ export const SCENARIOS = {
     id: 'baseline',
     label: 'Baseline Trajectory',
     badge: 'Standard',
-    description: 'Current real-time spending patterns, scheduled paychecks, and active subscriptions.',
+    description: 'Current recurring spend + historical daily velocity.',
     accent: 'emerald',
+    protectedBufferMultiplier: 1.0,
+    stripDiscretionary: false,
   },
-  conservative: {
-    id: 'conservative',
-    label: 'Conservative Cushion',
-    badge: '+15% Spend Buffer',
-    description: 'Assumes +15% variable spending expansion and -15% slower savings accumulation.',
+  lockdown: {
+    id: 'lockdown',
+    label: 'Lean / Lockdown Mode',
+    badge: 'Zero Discretionary',
+    description: 'Strips all discretionary categories (food delivery, entertainment, shopping) for the rest of the month.',
     accent: 'amber',
+    protectedBufferMultiplier: 1.0,
+    stripDiscretionary: true,
   },
   aggressive: {
     id: 'aggressive',
-    label: 'Aggressive Wealth Sweep',
-    badge: 'Max Savings',
-    description: 'Prioritizes maximum safe sweep transfers to investment goals and debt paydown.',
+    label: 'Aggressive Save Mode',
+    badge: '2x Buffer (₹4,000)',
+    description: 'Doubles the Protected Buffer from ₹2,000 to ₹4,000 and recalculates daily allowance.',
     accent: 'blue',
-  },
-  recession: {
-    id: 'recession',
-    label: 'Recession Stress-Test',
-    badge: '-20% Income Shock',
-    description: 'Simulates a 20% income reduction combined with a 10% inflation cost spike.',
-    accent: 'crimson',
+    protectedBufferMultiplier: 2.0,
+    stripDiscretionary: false,
   },
 };
 

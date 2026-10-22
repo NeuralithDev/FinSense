@@ -141,6 +141,29 @@ class FinancialAutoencoder(nn.Module):
         return model
 
 
+    def save_checkpoint(self, path: str) -> None:
+        torch.save({
+            "model_state_dict": self.state_dict(),
+            "input_dim": self.input_dim,
+            "hidden_dim": self.hidden_dim,
+            "latent_dim": self.latent_dim,
+            "anomaly_threshold": self.anomaly_threshold
+        }, path)
+
+    @classmethod
+    def load_checkpoint(cls, path: str, device: str = "cpu") -> "FinancialAutoencoder":
+        ckpt = torch.load(path, map_location=device, weights_only=False)
+        model = cls(
+            input_dim=ckpt.get("input_dim", 19),
+            hidden_dim=ckpt.get("hidden_dim", 12),
+            latent_dim=ckpt.get("latent_dim", 6)
+        )
+        model.load_state_dict(ckpt["model_state_dict"])
+        model.anomaly_threshold = ckpt.get("anomaly_threshold", None)
+        model.eval()
+        return model
+
+
 def train_autoencoder(
     model: FinancialAutoencoder,
     train_loader: DataLoader,

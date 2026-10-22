@@ -279,6 +279,26 @@ export default function BehavioralQuestionnaire({ onComplete, onBack }) {
               Question <span style={{ color: '#0F172A', fontWeight: 700 }}>{currentStep + 1}</span> of {questions.length}
             </div>
             <button
+              onClick={onComplete}
+              style={{
+                background: '#0D9488',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '6px 14px',
+                color: '#FFFFFF',
+                fontSize: '0.78rem',
+                cursor: 'pointer',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <span>Skip to Dashboard</span>
+              <ArrowRight size={13} />
+            </button>
+            <button
               onClick={onBack}
               style={{
                 background: '#F8FAFC',

@@ -111,6 +111,26 @@ class SpendingLSTM(nn.Module):
             log_preds = self.forward(x)
         return np.maximum(0.0, np.expm1(log_preds.cpu().numpy()))
 
+    def save_checkpoint(self, path: str) -> None:
+        torch.save({
+            "model_state_dict": self.state_dict(),
+            "input_dim": self.input_dim,
+            "hidden_dim": self.hidden_dim,
+            "num_categories": self.num_categories
+        }, path)
+
+    @classmethod
+    def load_checkpoint(cls, path: str, device: str = "cpu") -> "SpendingLSTM":
+        ckpt = torch.load(path, map_location=device, weights_only=False)
+        model = cls(
+            input_dim=ckpt.get("input_dim", 10),
+            hidden_dim=ckpt.get("hidden_dim", 64),
+            num_categories=ckpt.get("num_categories", 5)
+        )
+        model.load_state_dict(ckpt["model_state_dict"])
+        model.eval()
+        return model
+
 
 class EarlyStopping:
     """

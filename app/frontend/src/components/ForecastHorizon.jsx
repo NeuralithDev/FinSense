@@ -89,7 +89,10 @@ export default function ForecastHorizon({ forecastData, onHorizonChange, current
     envelopePath = `${upperPath} ${revLower} Z`;
   }
 
-  const safeFloorY = isSpend ? null : getY(500);
+  const safetyBufferFloor = currency.code === 'INR'
+    ? (forecastData.safe_floor_threshold || 2000)
+    : (forecastData.safe_floor_threshold ? forecastData.safe_floor_threshold / 84 : 250);
+  const safeFloorY = isSpend ? null : getY(safetyBufferFloor);
 
   // Gradient area path for smooth fill
   const areaFillPath = `${mainPath} L ${getX(points.length - 1)} ${padding.top + chartH} L ${getX(0)} ${padding.top + chartH} Z`;
@@ -114,11 +117,11 @@ export default function ForecastHorizon({ forecastData, onHorizonChange, current
   return (
     <div
       style={{
-        background: '#FFFFFF',
-        border: '1px solid #E2E8F0',
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-subtle)',
         borderRadius: '16px',
         padding: '24px 28px',
-        boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 1px 2px -1px rgba(15, 23, 42, 0.03)',
+        boxShadow: 'var(--shadow-card)',
         marginBottom: '24px',
       }}
     >
@@ -135,12 +138,12 @@ export default function ForecastHorizon({ forecastData, onHorizonChange, current
       >
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <h3 style={{ fontSize: '1.18rem', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>
+            <h3 style={{ fontSize: '1.18rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em', margin: 0 }}>
               Your {currentHorizon}-Day Balance Forecast
             </h3>
             <Badge variant="emerald">Live Forecast</Badge>
           </div>
-          <p style={{ fontSize: '0.8125rem', color: '#64748B', margin: '4px 0 0' }}>
+          <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', margin: '4px 0 0' }}>
             See exactly where your checking balance is headed after upcoming bills and paydays.
           </p>
         </div>
@@ -151,8 +154,8 @@ export default function ForecastHorizon({ forecastData, onHorizonChange, current
           <div
             style={{
               display: 'inline-flex',
-              background: '#F1F5F9',
-              border: '1px solid #E2E8F0',
+              background: 'var(--bg-surface-secondary)',
+              border: '1px solid var(--border-subtle)',
               borderRadius: '8px',
               padding: '2px',
             }}
@@ -160,15 +163,15 @@ export default function ForecastHorizon({ forecastData, onHorizonChange, current
             <button
               onClick={() => setActiveView('balance')}
               style={{
-                background: !isSpend ? '#FFFFFF' : 'transparent',
-                color: !isSpend ? '#0F172A' : '#64748B',
+                background: !isSpend ? 'var(--bg-card)' : 'transparent',
+                color: !isSpend ? 'var(--text-primary)' : 'var(--text-secondary)',
                 border: 'none',
                 borderRadius: '6px',
                 padding: '6px 12px',
                 fontSize: '0.78rem',
                 fontWeight: 600,
                 cursor: 'pointer',
-                boxShadow: !isSpend ? '0 1px 2px rgba(15, 23, 42, 0.06)' : 'none',
+                boxShadow: !isSpend ? 'var(--shadow-card)' : 'none',
               }}
             >
               Projected Balance
@@ -176,15 +179,15 @@ export default function ForecastHorizon({ forecastData, onHorizonChange, current
             <button
               onClick={() => setActiveView('spend')}
               style={{
-                background: isSpend ? '#FFFFFF' : 'transparent',
-                color: isSpend ? '#0F172A' : '#64748B',
+                background: isSpend ? 'var(--bg-card)' : 'transparent',
+                color: isSpend ? 'var(--text-primary)' : 'var(--text-secondary)',
                 border: 'none',
                 borderRadius: '6px',
                 padding: '6px 12px',
                 fontSize: '0.78rem',
                 fontWeight: 600,
                 cursor: 'pointer',
-                boxShadow: isSpend ? '0 1px 2px rgba(15, 23, 42, 0.06)' : 'none',
+                boxShadow: isSpend ? 'var(--shadow-card)' : 'none',
               }}
             >
               Daily Spending
@@ -195,8 +198,8 @@ export default function ForecastHorizon({ forecastData, onHorizonChange, current
           <div
             style={{
               display: 'inline-flex',
-              background: '#F1F5F9',
-              border: '1px solid #E2E8F0',
+              background: 'var(--bg-surface-secondary)',
+              border: '1px solid var(--border-subtle)',
               borderRadius: '8px',
               padding: '2px',
             }}
@@ -210,15 +213,15 @@ export default function ForecastHorizon({ forecastData, onHorizonChange, current
                 key={h.days}
                 onClick={() => onHorizonChange(h.days)}
                 style={{
-                  background: currentHorizon === h.days ? '#FFFFFF' : 'transparent',
-                  color: currentHorizon === h.days ? '#0F172A' : '#64748B',
+                  background: currentHorizon === h.days ? 'var(--bg-card)' : 'transparent',
+                  color: currentHorizon === h.days ? 'var(--text-primary)' : 'var(--text-secondary)',
                   border: 'none',
                   borderRadius: '6px',
                   padding: '6px 12px',
                   fontSize: '0.78rem',
                   fontWeight: 600,
                   cursor: 'pointer',
-                  boxShadow: currentHorizon === h.days ? '0 1px 2px rgba(15, 23, 42, 0.06)' : 'none',
+                  boxShadow: currentHorizon === h.days ? 'var(--shadow-card)' : 'none',
                 }}
               >
                 {h.label}
@@ -234,7 +237,7 @@ export default function ForecastHorizon({ forecastData, onHorizonChange, current
       </div>
 
       {/* SVG Chart Area */}
-      <div style={{ position: 'relative', width: '100%', overflowX: 'auto', background: '#FAFCFE', border: '1px solid #F1F5F9', borderRadius: '12px', padding: '12px 8px 8px' }}>
+      <div style={{ position: 'relative', width: '100%', overflowX: 'auto', background: 'var(--bg-surface-secondary)', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '12px 8px 8px' }}>
         <svg
           viewBox={`0 0 ${width} ${height}`}
           style={{ width: '100%', height: 'auto', display: 'block' }}
@@ -296,7 +299,7 @@ export default function ForecastHorizon({ forecastData, onHorizonChange, current
                 textAnchor="end"
                 fontFamily="sans-serif"
               >
-                {format(forecastData.safe_floor_threshold || 2000, { decimals: 0 })} Emergency Safety Buffer Floor
+                {format(safetyBufferFloor, { decimals: 0 })} Emergency Safety Buffer Floor
               </text>
             </g>
           )}
@@ -469,42 +472,42 @@ export default function ForecastHorizon({ forecastData, onHorizonChange, current
           gap: '16px',
           marginTop: '16px',
           paddingTop: '16px',
-          borderTop: '1px solid #F1F5F9',
+          borderTop: '1px solid var(--border-subtle)',
         }}
       >
         <div>
-          <span style={{ fontSize: '0.72rem', color: '#64748B', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>
             Expected Spending ({currentHorizon} Days)
           </span>
-          <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0F172A', fontFamily: 'var(--font-mono)' }}>
+          <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
             {format(forecastData.total_projected_spend || 24889.56)}
           </div>
         </div>
 
         <div>
-          <span style={{ fontSize: '0.72rem', color: '#64748B', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>
             Typical Daily Spend
           </span>
-          <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0F172A', fontFamily: 'var(--font-mono)' }}>
-            {format(forecastData.daily_net_burn_rate || 829.65)}<span style={{ fontSize: '0.8rem', color: '#64748B' }}> / day</span>
+          <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+            {format(forecastData.daily_net_burn_rate || 829.65)}<span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}> / day</span>
           </div>
         </div>
 
         <div>
-          <span style={{ fontSize: '0.72rem', color: '#64748B', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>
             Safe Buffer Above {format(forecastData.safe_floor_threshold || 2000, { decimals: 0 })}
           </span>
           <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0D9488', fontFamily: 'var(--font-mono)' }}>
-            +{format(Math.max(0, (forecastData.initial_balance || 10754.62) - (forecastData.safe_floor_threshold || 2000)), { decimals: 0 })} <span style={{ fontSize: '0.75rem', color: '#047857', fontWeight: 600 }}>(Safe)</span>
+            +{format(Math.max(0, (forecastData.initial_balance || 10754.62) - (forecastData.safe_floor_threshold || 2000)), { decimals: 0 })} <span style={{ fontSize: '0.75rem', color: '#10B981', fontWeight: 600 }}>(Safe)</span>
           </div>
         </div>
 
         <div>
-          <span style={{ fontSize: '0.72rem', color: '#64748B', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>
             Forecast Confidence
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-            <span style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0F172A' }}>
+            <span style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)' }}>
               High • 94% Reliable
             </span>
             <Badge variant="emerald">Verified</Badge>
