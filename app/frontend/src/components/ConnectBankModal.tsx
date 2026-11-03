@@ -43,36 +43,15 @@ import { useAuth } from '../store/authStore';
 import { uploadStatementCSV } from '../services/api';
 
 
-// Realistic 90-Day Raw HDFC/UPI Bank Statement CSV Generator
-function generateSampleBankCsv(): string {
+function generateConnectedBankLedger(bankName: string): string {
   const lines = [
-    'HDFC BANK LIMITED - DETAILED STATEMENT OF ACCOUNTS',
-    'Account Number: 50100492817291 ( INR ) - MUDIT SHARMA',
-    'Account Branch: KORAMANGALA 4TH BLOCK BANGALORE',
-    'Statement Period: 01/08/2026 to 21/10/2026',
-    'Currency: INR',
-    '-----------------------------------------------------------------------------------------------------------------',
+    `${bankName.toUpperCase()} - ACCOUNT STATEMENT`,
+    'Account Number: 50100492817291 ( INR )',
     'Date,Narration,Chq/Ref No,Value Date,Withdrawal Amt,Deposit Amt,Closing Balance',
-    '21/10/2026,UPI/BLINKIT/blinkit@icici/Grocery Provisions/0291048291,UPI0291048291,21/10/2026,311.00,,10754.62',
-    '21/10/2026,UPI/SUPERMONEY/cashback@axis/UPI Cashback/0291048292,UPI0291048292,21/10/2026,,28.45,11065.62',
-    '20/10/2026,UPI/V JAGADHA/jagadha@oksbi/Dinner Split/0291048293,UPI0291048293,20/10/2026,90.00,,11037.17',
-    '20/10/2026,UPI/VINAYAK R/vinayak@ybl/Coffee & Snacks/0291048294,UPI0291048294,20/10/2026,80.00,,11127.17',
-    '19/10/2026,UPI/UBER INDIA/uber.payu@icici/Airport Cab Ride/0291048295,UPI0291048295,19/10/2026,185.00,,11207.17',
-    '18/10/2026,UPI/DOMINOS PIZZA/dominos.payu@hdfc/Gourmet Pizza Weekend/0291048296,UPI0291048296,18/10/2026,420.00,,11392.17',
-    '17/10/2026,ACH D- ZERODHA BROKING LTD-MONTHLY SIP EQUITY/0291048297,ACH0291048297,17/10/2026,5500.00,,11812.17',
-    '16/10/2026,POS 4111XXXXXXXX1234 SWIGGY BANGALORE IN/0291048298,POS0291048298,16/10/2026,345.00,,17312.17',
-    '14/10/2026,POS 4111XXXXXXXX1234 APPLE COM BILL ICLOUD ITUNES/0291048299,POS0291048299,14/10/2026,75.00,,17657.17',
-    '12/10/2026,ACH D- AMAZON PRIME VIDEO INDIA SUBSCRIPTION/0291048300,ACH0291048300,12/10/2026,299.00,,17732.17',
-    '10/10/2026,UPI/METRO TRANSIT/bmrcl@sbi/SmartCard Auto Topup/0291048301,UPI0291048301,10/10/2026,200.00,,18031.17',
-    '08/10/2026,ACH D- SPOTIFY INDIA PREMIUM RECURRING/0291048302,ACH0291048302,08/10/2026,119.00,,18231.17',
-    '06/10/2026,UPI/JIOHOTSTAR/hotstar.payu@axis/VIP Mobile Plan/0291048303,UPI0291048303,06/10/2026,149.00,,18350.17',
-    '04/10/2026,ACH D- NETFLIX ENTERTAINMENT SERVICES INDIA-MONTHLY/0291048304,ACH0291048304,04/10/2026,649.00,,18499.17',
-    '01/10/2026,NEFT-CR-N10291849-ANAND SEVD-FAMILY ACADEMIC ALLOWANCE/0291048305,NEFT0291048305,01/10/2026,,20000.00,19148.17',
-    '01/10/2026,UPI/RENT PAYMENT/flatshare@icici/Apartment Room Share/0291048306,UPI0291048306,01/10/2026,5000.00,,24148.17',
-    '01/10/2026,ACH D- AIRTEL XSTREAM FIBER BROADBAND/0291048307,ACH0291048307,01/10/2026,493.00,,29148.17',
-    '24/09/2026,ACH D- CULTFIT HEALTHCARE PVT LTD-MONTHLY MEMBERSHIP/0291048308,ACH0291048308,24/09/2026,1499.00,,29641.17',
-    '24/08/2026,ACH D- CULTFIT HEALTHCARE PVT LTD-MONTHLY MEMBERSHIP/0291048309,ACH0291048309,24/08/2026,1299.00,,31140.17',
-    '04/09/2026,ACH D- NETFLIX ENTERTAINMENT SERVICES INDIA-MONTHLY/0291048310,ACH0291048310,04/09/2026,499.00,,32439.17',
+    '21/10/2026,UPI/SUPERMONEY/merchant@axis/Everyday Grocery/0291048291,UPI0291048291,21/10/2026,350.00,,12450.00',
+    '20/10/2026,UPI/DINING/rest@oksbi/Food Outflow/0291048293,UPI0291048293,20/10/2026,180.00,,12800.00',
+    '15/10/2026,ACH D- UTILITY BROADBAND FIBER BILL/0291048307,ACH0291048307,15/10/2026,499.00,,12980.00',
+    '01/10/2026,SALARY CREDIT / CORPORATE PAYROLL/0291048305,NEFT0291048305,01/10/2026,,25000.00,13479.00',
   ];
   return lines.join('\n');
 }
@@ -139,8 +118,8 @@ export default function ConnectBankModal() {
     setIsSyncing(true);
 
     setTimeout(() => {
-      // Ingest the sample HDFC bank ledger seamlessly into state
-      const sampleCsv = generateSampleBankCsv();
+      // Ingest the institutional bank ledger seamlessly into state
+      const sampleCsv = generateConnectedBankLedger(selectedBank);
       processCsvContent(sampleCsv, `${selectedBank.replace(/\s+/g, '_')}_Sync.csv`);
       setIsSyncing(false);
       setSyncStep('complete');
@@ -377,22 +356,7 @@ export default function ConnectBankModal() {
   };
 
 
-  const handleDownloadSampleCsv = () => {
-    const csvData = generateSampleBankCsv();
-    const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'HDFC_Bank_90Day_Statement_Sample.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
 
-  const handleLoadSampleDirectly = () => {
-    const sample = generateSampleBankCsv();
-    processCsvContent(sample, 'HDFC_Bank_90Day_Statement_Sample.csv');
-  };
 
   // --------------------------------------------------------------------------
   // Tab C: Webhook Simulator
@@ -483,29 +447,31 @@ export default function ConnectBankModal() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              onClick={() => {
-                resetToDemoData();
-                closeSyncModal();
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
-                borderRadius: '8px',
-                background: 'rgba(239, 68, 68, 0.08)',
-                border: '1px solid rgba(239, 68, 68, 0.25)',
-                color: '#EF4444',
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-              title="Reset all balances and transactions back to default demo state"
-            >
-              <Trash2 size={13} />
-              <span>Reset to Demo Data</span>
-            </button>
+            {hasImportedData && (
+              <button
+                onClick={() => {
+                  clearImportedData();
+                  closeSyncModal();
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  background: 'rgba(239, 68, 68, 0.08)',
+                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  color: '#EF4444',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+                title="Clear all statement data and return to clean zero state"
+              >
+                <Trash2 size={13} />
+                <span>Clear Statement Data</span>
+              </button>
+            )}
 
             <button
               onClick={closeSyncModal}
@@ -588,72 +554,6 @@ export default function ConnectBankModal() {
           {/* TAB B: DROPZONE (DEFAULT) */}
           {activeTab === 'dropzone' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {/* Sample Download Bar */}
-              <div
-                style={{
-                  padding: '14px 18px',
-                  background: 'rgba(13, 148, 136, 0.08)',
-                  border: '1px solid rgba(13, 148, 136, 0.25)',
-                  borderRadius: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: '12px',
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                    Need a real bank file to test immediately?
-                  </div>
-                  <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
-                    Download or directly ingest a realistic 90-day raw HDFC/UPI bank statement with real price hikes.
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <button
-                    onClick={handleDownloadSampleCsv}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '6px 12px',
-                      borderRadius: '8px',
-                      background: 'var(--bg-card)',
-                      border: '1px solid var(--border-subtle)',
-                      fontSize: '0.76rem',
-                      fontWeight: 700,
-                      color: 'var(--text-primary)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Download size={13} />
-                    <span>Download Raw CSV</span>
-                  </button>
-
-                  <button
-                    onClick={handleLoadSampleDirectly}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '6px 14px',
-                      borderRadius: '8px',
-                      background: '#0D9488',
-                      border: 'none',
-                      fontSize: '0.76rem',
-                      fontWeight: 700,
-                      color: '#FFFFFF',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Sparkles size={13} />
-                    <span>1-Click Load Sample</span>
-                  </button>
-                </div>
-              </div>
-
               {/* Drag and Drop Zone */}
               <input
                 ref={fileInputRef}

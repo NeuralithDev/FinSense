@@ -452,21 +452,6 @@ export default function SubscriptionCommander({ subscriptionData }) {
             >
               + Connect Bank or Upload Statement
             </button>
-            <button
-              onClick={loadDemoData}
-              style={{
-                padding: '8px 16px',
-                borderRadius: '8px',
-                background: 'var(--bg-card)',
-                color: 'var(--text-primary)',
-                border: '1px solid var(--border-subtle)',
-                fontSize: '0.82rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Preview Demo Subscriptions
-            </button>
           </div>
         </div>
       ) : (

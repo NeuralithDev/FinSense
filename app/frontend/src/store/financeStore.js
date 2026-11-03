@@ -520,30 +520,11 @@ export function importRawBankStatementAction({
  * Loads sample demo data for test drive
  */
 export function loadDemoDataAction() {
-  seedDemoSandboxData().catch((err) => console.warn('Backend demo seed fallback notice:', err));
+  clearImportedDataAction();
+}
 
-  const normalized = normalizeTransactionLedger(BASE_REALISTIC_TRANSACTIONS);
-  const subs = detectRecurringSubscriptions(normalized);
-  const alerts = computeUnusualActivityAlerts(normalized);
-
-  storeState = {
-    ...DEMO_FINANCE_STATE,
-    transactions: normalized,
-    normalizedTransactions: normalized,
-    subscriptions: subs,
-    detectedSubscriptions: subs,
-    anomalies: alerts,
-    unusualActivityAlerts: alerts,
-    hasImportedData: true,
-    hasConnectedBank: true,
-    isDemoMode: true,
-    activeNotification: {
-      type: 'info',
-      title: 'Demo Sandbox Ledger Loaded 🧪',
-      message: 'Now test-driving with sample student profile (ICICI ••2708, ₹10,754 balance, 6 subscriptions).',
-    },
-  };
-  emitChange();
+export function resetToDemoDataAction() {
+  clearImportedDataAction();
 }
 
 /**

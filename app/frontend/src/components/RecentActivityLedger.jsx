@@ -762,21 +762,6 @@ export default function RecentActivityLedger() {
                   >
                     + Connect Bank or Upload Statement
                   </button>
-                  <button
-                    onClick={loadDemoData}
-                    style={{
-                      background: 'var(--bg-surface-secondary)',
-                      color: 'var(--text-primary)',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: '8px',
-                      padding: '8px 16px',
-                      fontSize: '0.8rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Test Drive Demo Portfolio
-                  </button>
                 </div>
               )}
             </div>

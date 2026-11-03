@@ -612,30 +612,7 @@ export default function AppShell({
               </select>
             </div>
 
-            {/* Demo Overspent Mode Toggle (only visible during Demo Sandbox test drive) */}
-            {isDemoMode && (
-              <button
-                onClick={toggleCrisisDemoMode}
-                title="Toggle between standard on-track pacing (67.5% used) and overspent crisis state (132% used) to test Constrained Recovery Mode in Safe-to-Spend"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  padding: '6px 10px',
-                  background: isCrisisDemoMode ? 'rgba(239, 68, 68, 0.12)' : 'var(--bg-surface-secondary)',
-                  border: `1px solid ${isCrisisDemoMode ? 'rgba(239, 68, 68, 0.3)' : 'var(--border-subtle)'}`,
-                  borderRadius: '6px',
-                  color: isCrisisDemoMode ? '#EF4444' : 'var(--text-secondary)',
-                  fontSize: '0.76rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                <span>{isCrisisDemoMode ? '🚨 Overspent State (132%)' : '🟢 Normal Pacing (67%)'}</span>
-              </button>
-            )}
+
 
             {/* Currency Switcher */}
             <select
