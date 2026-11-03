@@ -82,7 +82,7 @@ export default function BankOnboardingBanner() {
               </span>
             </div>
             <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              {activeStatementMeta?.institution || 'Bank'} &bull; {transactions?.length || activeStatementMeta?.rowsCount || 0} Transactions &bull; Account: {userName}
+              {activeStatementMeta?.institution || 'HDFC Bank'} &bull; {transactions?.length || activeStatementMeta?.rowsCount || 0} Transactions &bull; Verified Statement
             </div>
           </div>
         </div>
