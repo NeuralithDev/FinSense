@@ -39,6 +39,15 @@ class CopilotNarrator:
     """
 
     @classmethod
+    def _get_currency_sym(cls) -> str:
+        try:
+            from src.data.user_pipeline import UserDataPipeline
+            curr = UserDataPipeline.get_instance().accounts.get("checking", {}).get("currency", "INR")
+            return "₹" if curr == "INR" else "$"
+        except Exception:
+            return "₹"
+
+    @classmethod
     def answer_query(
         cls,
         prompt: str,
@@ -84,6 +93,7 @@ class CopilotNarrator:
     ) -> CopilotResponse:
         cost = entities.amount if entities.amount is not None else 500.0
         item = entities.item_name or "this purchase"
+        sym = cls._get_currency_sym()
 
         burn = max(1.0, ctx.monthly_expenses)
         res = AffordabilityEngine.max_safe_lump_sum_purchase(
@@ -104,12 +114,12 @@ class CopilotNarrator:
         if checking_remaining >= ctx.safety_buffer and cost <= max_safe:
             verdict = "AFFORDABLE"
             narrative = (
-                f"**Verdict: Safe to buy.** Yes, you can comfortably afford {item} (${cost:,.2f}).\n\n"
-                f"• **Checking Cushion:** After spending ${cost:,.2f}, your checking account will retain **${checking_remaining:,.2f}**, "
-                f"which remains **${cushion_above_buffer:,.2f} above** your ${ctx.safety_buffer:,.2f} safety buffer.\n"
-                f"• **Emergency Reserves:** Your liquid savings (${ctx.savings_balance:,.2f}) remain completely untouched, "
+                f"**Verdict: Safe to buy.** Yes, you can comfortably afford {item} ({sym}{cost:,.2f}).\n\n"
+                f"• **Checking Cushion:** After spending {sym}{cost:,.2f}, your checking account will retain **{sym}{checking_remaining:,.2f}**, "
+                f"which remains **{sym}{cushion_above_buffer:,.2f} above** your {sym}{ctx.safety_buffer:,.2f} safety buffer.\n"
+                f"• **Emergency Reserves:** Your liquid savings ({sym}{ctx.savings_balance:,.2f}) remain completely untouched, "
                 f"protecting your **{ctx.runway_months:.1f} months** of emergency runway.\n"
-                f"• **Maximum Safe Limit:** Your current safe spending ceiling without touching emergency funds is **${max_safe:,.2f}**."
+                f"• **Maximum Safe Limit:** Your current safe spending ceiling without touching emergency funds is **{sym}{max_safe:,.2f}**."
             )
             followups = [
                 f"Add {item} to Autopilot Goals",
@@ -119,11 +129,11 @@ class CopilotNarrator:
         elif checking_remaining >= 0.0 or total_liquid_after >= (burn * 1.0):
             verdict = "STRETCH"
             narrative = (
-                f"**Verdict: Stretch Purchase.** You have the cash for {item} (${cost:,.2f}), but it leaves you vulnerable.\n\n"
-                f"• **Checking Impact:** It reduces checking to **${max(0.0, checking_remaining):,.2f}**, which falls "
-                f"**${abs(cushion_above_buffer):,.2f} short** of your ${ctx.safety_buffer:,.2f} cushion.\n"
+                f"**Verdict: Stretch Purchase.** You have the cash for {item} ({sym}{cost:,.2f}), but it leaves you vulnerable.\n\n"
+                f"• **Checking Impact:** It reduces checking to **{sym}{max(0.0, checking_remaining):,.2f}**, which falls "
+                f"**{sym}{abs(cushion_above_buffer):,.2f} short** of your {sym}{ctx.safety_buffer:,.2f} cushion.\n"
                 f"• **Runway Reduction:** This purchase cuts your cash runway by **{runway_loss_weeks:.1f} weeks**.\n"
-                f"• **Copilot Recommendation:** Safe limit today is **${max_safe:,.2f}**. Consider waiting until next payday or splitting this purchase across two cycles."
+                f"• **Copilot Recommendation:** Safe limit today is **{sym}{max_safe:,.2f}**. Consider waiting until next payday or splitting this purchase across two cycles."
             )
             followups = [
                 "Set a savings goal for this item",
@@ -133,15 +143,15 @@ class CopilotNarrator:
         else:
             verdict = "UNAFFORDABLE"
             narrative = (
-                f"**Verdict: Unaffordable right now.** Purchasing {item} (${cost:,.2f}) poses significant risk.\n\n"
-                f"• **Overdraft Exposure:** It exceeds your checking balance (${ctx.checking_balance:,.2f}) and would leave you "
-                f"**${abs(checking_remaining):,.2f} in the negative**, triggering bank overdraft fees.\n"
-                f"• **Safe Spending Limit:** Your maximum safe purchase today is **${max_safe:,.2f}**.\n"
-                f"• **Actionable Plan:** Setting aside your weekly autopilot sweep (${ctx.safe_sweep_amount:,.2f}/wk) will fund this in "
+                f"**Verdict: Unaffordable right now.** Purchasing {item} ({sym}{cost:,.2f}) poses significant risk.\n\n"
+                f"• **Overdraft Exposure:** It exceeds your checking balance ({sym}{ctx.checking_balance:,.2f}) and would leave you "
+                f"**{sym}{abs(checking_remaining):,.2f} in the negative**, triggering bank overdraft fees.\n"
+                f"• **Safe Spending Limit:** Your maximum safe purchase today is **{sym}{max_safe:,.2f}**.\n"
+                f"• **Actionable Plan:** Setting aside your weekly autopilot sweep ({sym}{ctx.safe_sweep_amount:,.2f}/wk) will fund this in "
                 f"**{max(2, int(np.ceil(cost / max(50.0, ctx.safe_sweep_amount))))} weeks** without risking bills."
             )
             followups = [
-                f"Create a ${cost:,.0f} savings goal",
+                f"Create a {sym}{cost:,.0f} savings goal",
                 "How can I cut expenses?",
                 "Show my health score"
             ]
@@ -164,7 +174,7 @@ class CopilotNarrator:
             suggested_followups=followups,
             action_card={
                 "title": f"Plan: {item}",
-                "subtitle": f"Safe ceiling is ${max_safe:,.2f} without touching emergency funds",
+                "subtitle": f"Safe ceiling is {sym}{max_safe:,.2f} without touching emergency funds",
                 "button_text": "Simulate in Affordability Tool",
                 "action_type": "NAVIGATE_TAB",
                 "target_tab": "affordability"
@@ -179,14 +189,15 @@ class CopilotNarrator:
         ctx: GroundTruthFinancialContext,
         confidence: float
     ) -> CopilotResponse:
+        sym = cls._get_currency_sym()
         annual_cost = ctx.total_monthly_subscriptions * 12.0
         opt_savings = round(ctx.total_monthly_subscriptions * 0.25 / 4.33, 2)
         narrative = (
             f"**Subscription Audit Overview:**\n\n"
             f"• **Active Subscriptions:** You currently maintain **{ctx.active_subscriptions_count} recurring commitments**.\n"
-            f"• **Monthly Outflow:** **${ctx.total_monthly_subscriptions:,.2f}/month** (projected to **${annual_cost:,.2f}/year**).\n"
-            f"• **Upcoming Charges:** Approximately **${ctx.upcoming_bills_7d:,.2f}** in recurring charges are scheduled over the next 7 days.\n"
-            f"• **Optimization Opportunity:** Cancelling just 1 unused service can increase your weekly autopilot savings by **${opt_savings:,.2f}/week**."
+            f"• **Monthly Outflow:** **{sym}{ctx.total_monthly_subscriptions:,.2f}/month** (projected to **{sym}{annual_cost:,.2f}/year**).\n"
+            f"• **Upcoming Charges:** Approximately **{sym}{ctx.upcoming_bills_7d:,.2f}** in recurring charges are scheduled over the next 7 days.\n"
+            f"• **Optimization Opportunity:** Cancelling just 1 unused service can increase your weekly autopilot savings by **{sym}{opt_savings:,.2f}/week**."
         )
         return CopilotResponse(
             intent=AssistantIntent.SUBSCRIPTION_AUDIT.value,
@@ -207,7 +218,7 @@ class CopilotNarrator:
             ],
             action_card={
                 "title": "Recurring Commitments Radar",
-                "subtitle": f"{ctx.active_subscriptions_count} active bills (${ctx.total_monthly_subscriptions:,.2f}/mo)",
+                "subtitle": f"{ctx.active_subscriptions_count} active bills ({sym}{ctx.total_monthly_subscriptions:,.2f}/mo)",
                 "button_text": "Audit & Cancel Bills",
                 "action_type": "NAVIGATE_TAB",
                 "target_tab": "subscriptions"
@@ -222,25 +233,27 @@ class CopilotNarrator:
         ctx: GroundTruthFinancialContext,
         confidence: float
     ) -> CopilotResponse:
+        sym = cls._get_currency_sym()
         if ctx.is_sweep_paused:
             verdict = "PAUSED"
             narrative = (
                 f"**Autopilot Status: Paused for Safety.**\n\n"
                 f"FinSense has temporarily paused your automated transfers this week.\n\n"
                 f"• **Reason:** {ctx.safe_sweep_reason}\n"
-                f"• **Protection:** This prevents dipping below your **${ctx.safety_buffer:,.2f}** safety buffer under conservative spending.\n"
+                f"• **Protection:** This prevents dipping below your **{sym}{ctx.safety_buffer:,.2f}** safety buffer under conservative spending.\n"
                 f"• **Next Check:** Autopilot will automatically resume once your next income arrives."
             )
         else:
             verdict = "ACTIVE_SAFE_SWEEP"
             narrative = (
                 f"**Safe Sweep Recommendation:**\n\n"
-                f"It is safe to transfer **${ctx.safe_sweep_amount:,.2f}** to savings this week.\n\n"
-                f"• **Current Checking:** **${ctx.checking_balance:,.2f}**\n"
-                f"• **Conservative Spending & Bills:** Accounts for **${ctx.forecast_spend_mean_7d:,.2f}** variable spend and **${ctx.upcoming_bills_7d:,.2f}** upcoming bills.\n"
-                f"• **Guaranteed Cushion:** Leaves your checking cushion at least **${ctx.safety_buffer:,.2f}** intact with 99% confidence (0.01 overdraft probability)."
+                f"It is safe to transfer **{sym}{ctx.safe_sweep_amount:,.2f}** to savings this week.\n\n"
+                f"• **Current Checking:** **{sym}{ctx.checking_balance:,.2f}**\n"
+                f"• **Conservative Spending & Bills:** Accounts for **{sym}{ctx.forecast_spend_mean_7d:,.2f}** variable spend and **{sym}{ctx.upcoming_bills_7d:,.2f}** upcoming bills.\n"
+                f"• **Guaranteed Cushion:** Leaves your checking cushion at least **{sym}{ctx.safety_buffer:,.2f}** intact with 99% confidence (0.01 overdraft probability)."
             )
 
+        sweep_target = max(50.0, round(ctx.safe_sweep_amount * 0.5, 0))
         return CopilotResponse(
             intent=AssistantIntent.SAVINGS_AUTOPILOT.value,
             confidence=confidence,
@@ -255,14 +268,14 @@ class CopilotNarrator:
                 "upcoming_bills_7d": ctx.upcoming_bills_7d
             },
             suggested_followups=[
-                "Transfer $50 to Emergency Cushion",
+                f"Transfer {sym}{sweep_target:,.0f} to Emergency Cushion",
                 "View 52-week backtest results",
                 "Can I afford to save more?"
             ],
             action_card={
                 "title": "Smart Safe Sweep Available",
-                "subtitle": f"${ctx.safe_sweep_amount:,.2f} ready to transfer to savings",
-                "button_text": f"Transfer ${ctx.safe_sweep_amount:,.2f} Now",
+                "subtitle": f"{sym}{ctx.safe_sweep_amount:,.2f} ready to transfer to savings",
+                "button_text": f"Transfer {sym}{ctx.safe_sweep_amount:,.2f} Now",
                 "action_type": "TRANSFER_SWEEP",
                 "amount": ctx.safe_sweep_amount
             }
@@ -276,17 +289,19 @@ class CopilotNarrator:
         ctx: GroundTruthFinancialContext,
         confidence: float
     ) -> CopilotResponse:
+        sym = cls._get_currency_sym()
         total_outflow = ctx.forecast_spend_mean_7d + ctx.upcoming_bills_7d
         est_end_bal = ctx.checking_balance - total_outflow
 
         narrative = (
             f"**7-Day Cash-Flow Forecast:**\n\n"
-            f"• **Current Checking:** **${ctx.checking_balance:,.2f}**\n"
-            f"• **Projected Variable Spending:** **${ctx.forecast_spend_mean_7d:,.2f}** (± ${ctx.forecast_spend_std_7d:,.2f} volatility)\n"
-            f"• **Scheduled Bills:** **${ctx.upcoming_bills_7d:,.2f}**\n"
-            f"• **Projected Balance in 7 Days:** **${max(0.0, est_end_bal):,.2f}**\n"
+            f"• **Current Checking:** **{sym}{ctx.checking_balance:,.2f}**\n"
+            f"• **Projected Variable Spending:** **{sym}{ctx.forecast_spend_mean_7d:,.2f}** (± {sym}{ctx.forecast_spend_std_7d:,.2f} volatility)\n"
+            f"• **Scheduled Bills:** **{sym}{ctx.upcoming_bills_7d:,.2f}**\n"
+            f"• **Projected Balance in 7 Days:** **{sym}{max(0.0, est_end_bal):,.2f}**\n"
             f"• **Overdraft Risk:** {'Zero risk detected.' if est_end_bal >= ctx.safety_buffer else 'Moderate risk - balance will approach safety buffer.'}"
         )
+        sample_purchase = 2000.0 if sym == "₹" else 200.0
         return CopilotResponse(
             intent=AssistantIntent.CASHFLOW_FORECAST.value,
             confidence=confidence,
@@ -301,12 +316,12 @@ class CopilotNarrator:
             },
             suggested_followups=[
                 "How much is safe to sweep?",
-                "Can I afford a $200 purchase?",
+                f"Can I afford a {sym}{sample_purchase:,.0f} purchase?",
                 "Show detailed daily forecast"
             ],
             action_card={
                 "title": "30-Day Cash Horizon",
-                "subtitle": f"Projected end balance: ${max(0.0, est_end_bal):,.2f}",
+                "subtitle": f"Projected end balance: {sym}{max(0.0, est_end_bal):,.2f}",
                 "button_text": "View Cash Horizon Chart",
                 "action_type": "NAVIGATE_TAB",
                 "target_tab": "forecast"
@@ -364,9 +379,10 @@ class CopilotNarrator:
         ctx: GroundTruthFinancialContext,
         confidence: float
     ) -> CopilotResponse:
+        sym = cls._get_currency_sym()
         narrative = (
             f"**Peer Benchmarking (Financial Twins):**\n\n"
-            f"We matched your financial profile against anonymous peers in your monthly income cohort (${ctx.monthly_income:,.0f}/mo):\n\n"
+            f"We matched your financial profile against anonymous peers in your monthly income cohort ({sym}{ctx.monthly_income:,.0f}/mo):\n\n"
             f"• **Peer Savings Rate:** Top twins in your cohort save an average of **28% of income**.\n"
             f"• **Emergency Runway:** Peers maintain an average of **3.4 months** of expense reserves (your runway: **{ctx.runway_months:.1f} months**).\n"
             f"• **Winning Habit:** 84% of high-performing twins automate a weekly savings sweep on payday."
@@ -405,12 +421,13 @@ class CopilotNarrator:
         ctx: GroundTruthFinancialContext,
         confidence: float
     ) -> CopilotResponse:
+        sym = cls._get_currency_sym()
         narrative = (
             f"**Personalized Action Recommendations:**\n\n"
             f"Based on your profile ({ctx.persona}, Health Score {ctx.health_score:.1f}), here are your top 3 prioritized moves:\n\n"
-            f"1. **Build 1-Month Emergency Cushion:** Automate **${ctx.safe_sweep_amount:,.2f}** weekly transfers to reach 30 days of reserves.\n"
-            f"2. **Audit Subscriptions:** Review your **{ctx.active_subscriptions_count} recurring bills** (${ctx.total_monthly_subscriptions:,.2f}/mo) to eliminate redundancies.\n"
-            f"3. **Stabilize Volatility:** Keep checking above your **${ctx.safety_buffer:,.2f}** cushion before discretionary splurges."
+            f"1. **Build 1-Month Emergency Cushion:** Automate **{sym}{ctx.safe_sweep_amount:,.2f}** weekly transfers to reach 30 days of reserves.\n"
+            f"2. **Audit Subscriptions:** Review your **{ctx.active_subscriptions_count} recurring bills** ({sym}{ctx.total_monthly_subscriptions:,.2f}/mo) to eliminate redundancies.\n"
+            f"3. **Stabilize Volatility:** Keep checking above your **{sym}{ctx.safety_buffer:,.2f}** cushion before discretionary splurges."
         )
         return CopilotResponse(
             intent=AssistantIntent.ACTION_RECOMMENDATION.value,
@@ -430,8 +447,8 @@ class CopilotNarrator:
             ],
             action_card={
                 "title": "Automate Priority Move",
-                "subtitle": f"Transfer ${ctx.safe_sweep_amount:,.2f} towards your Emergency Cushion",
-                "button_text": f"Transfer ${ctx.safe_sweep_amount:,.2f} Now",
+                "subtitle": f"Transfer {sym}{ctx.safe_sweep_amount:,.2f} towards your Emergency Cushion",
+                "button_text": f"Transfer {sym}{ctx.safe_sweep_amount:,.2f} Now",
                 "action_type": "TRANSFER_SWEEP",
                 "amount": ctx.safe_sweep_amount
             }
@@ -469,6 +486,7 @@ class CopilotNarrator:
                 "action_type": "TRANSFER_SWEEP",
                 "amount": ctx.safe_sweep_amount
             }
+            sample_purchase = 12000.0 if sym == "₹" else 500.0
             return CopilotResponse(
                 intent=AssistantIntent.GENERAL_QUERY.value,
                 confidence=confidence,
@@ -476,7 +494,7 @@ class CopilotNarrator:
                 grounded_narrative=narrative,
                 verified_metrics=None,
                 suggested_followups=[
-                    f"Can I afford a {sym}12,000 purchase?",
+                    f"Can I afford a {sym}{sample_purchase:,.0f} purchase?",
                     "How much can I safely save this week?",
                     "Which subscriptions are active?",
                     "What will my balance look like in 14 days?"
@@ -487,14 +505,15 @@ class CopilotNarrator:
         narrative = (
             f"I am your FinSense Financial Copilot. Unlike backward-looking trackers, I predict what will happen to your money, "
             f"decide what is safe to do, and protect you from overdrafts.\n\n"
-            f"You currently have **${ctx.checking_balance:,.2f}** in checking and **${ctx.savings_balance:,.2f}** in savings. "
-            f"Your weekly safe sweep is **${ctx.safe_sweep_amount:,.2f}**.\n\n"
+            f"You currently have **{sym}{ctx.checking_balance:,.2f}** in checking and **{sym}{ctx.savings_balance:,.2f}** in savings. "
+            f"Your weekly safe sweep is **{sym}{ctx.safe_sweep_amount:,.2f}**.\n\n"
             f"You can ask me questions like:\n"
             f"• *'Can I afford a new laptop?'*\n"
             f"• *'What subscriptions am I paying for?'*\n"
             f"• *'How much is safe to save this week?'*\n"
             f"• *'What is my financial health score?'*"
         )
+        sample_purchase = 5000.0 if sym == "₹" else 500.0
         return CopilotResponse(
             intent=AssistantIntent.GENERAL_QUERY.value,
             confidence=confidence,
@@ -506,14 +525,14 @@ class CopilotNarrator:
                 "safe_sweep_amount": ctx.safe_sweep_amount
             },
             suggested_followups=[
-                "Can I afford a $500 purchase?",
+                f"Can I afford a {sym}{sample_purchase:,.0f} purchase?",
                 "How much can I save this week?",
                 "What is my health score?"
             ],
             action_card={
                 "title": "Safe Sweep Available",
-                "subtitle": f"${ctx.safe_sweep_amount:,.2f} ready for transfer",
-                "button_text": f"Transfer ${ctx.safe_sweep_amount:,.2f} Now",
+                "subtitle": f"{sym}{ctx.safe_sweep_amount:,.2f} ready for transfer",
+                "button_text": f"Transfer {sym}{ctx.safe_sweep_amount:,.2f} Now",
                 "action_type": "TRANSFER_SWEEP",
                 "amount": ctx.safe_sweep_amount
             }

@@ -15,9 +15,9 @@ export default function TwinBenchmarking({ twinData }) {
   };
 
   const insights = twinData.top_insights || [
-    'You save 18% more allowance than your campus peer cluster median.',
-    'Your recurring subscription footprint is ₹75/mo (peer avg: ₹380/mo).',
-    'Dining and food delivery account for 38% of non-essential outflow (peer avg: 42%).',
+    `You save ${percentiles.savings_rate}% of your verified monthly inflow, outperforming peer cohort median.`,
+    'Discretionary everyday spending is well-controlled against lifestyle peer benchmarks.',
+    `Liquid emergency cushion is stronger than ${percentiles.cash_runway || 70}% of peers in your income tier.`,
   ];
 
   return (
@@ -89,20 +89,20 @@ export default function TwinBenchmarking({ twinData }) {
               color: 'var(--text-secondary)',
               border: '1px solid var(--border-subtle)'
             }}>
-              Matched Group: {twinData.cohort_name || 'University Students & Young Scholars (₹15,000 - ₹30,000/mo Allowance)'}
+              Matched Group: {twinData.cohort_name || 'Verified Income & Lifestyle Cohort'}
             </span>
 
             <button
               onClick={() => openInspector({
                 metricName: 'Peer Group Comparison',
                 value: `Better than ${percentiles.savings_rate}% of peers`,
-                formula: 'Matched anonymously with students in your allowance bracket and campus cohort',
-                description: 'We compare your monthly savings, recurring bills, and everyday spending against anonymous student peers with similar allowance and campus lifestyle patterns.',
+                formula: `Matched anonymously with verified peers in your income tier (${twinData.cohort_name || 'Verified Income Bracket'})`,
+                description: 'We compare your monthly savings rate, fixed obligations, and variable burn against anonymous peers with similar cash-flow patterns.',
                 drivers: [
-                  { name: 'Income Match', weight: 'Exact Bracket', impact: 'Student allowance of ₹15,000–₹30,000/mo' },
-                  { name: 'Campus Living', weight: 'Hostel & Local', impact: 'Adjusted for campus food and student transit' },
-                  { name: 'Monthly Savings Rate', weight: `+${percentiles.savings_rate}%`, impact: 'Ahead of typical student savings buffer' },
-                  { name: 'Dining & Delivery Habits', weight: 'Moderate', impact: 'In line with campus food delivery averages' },
+                  { name: 'Income Match', weight: 'Exact Bracket', impact: twinData.cohort_name || 'Income Tier & Cash-Flow Cluster' },
+                  { name: 'Lifestyle & Discretionary', weight: 'Spending Patterns', impact: 'Adjusted for local living expenses and non-essential burn' },
+                  { name: 'Monthly Savings Velocity', weight: `+${percentiles.savings_rate}%`, impact: 'Comparison against cohort median reserve growth' },
+                  { name: 'Recurring Commitments', weight: 'Fixed Bills', impact: 'Recurring subscription and bill burden relative to inflow' },
                 ]
               })}
               style={{

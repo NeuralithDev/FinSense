@@ -394,6 +394,67 @@ export function cleanRawNarration(rawString: string): string {
 }
 
 /**
+ * Robustly parses varied bank statement date formats (DD/MM/YYYY, DD/MM/YY, YYYY/MM/DD, DD-MM-YYYY, DD-Mon-YYYY)
+ * and always returns a guaranteed valid ISO 'YYYY-MM-DD' date string.
+ */
+export function parseNormalizedDate(rawDate?: string): string {
+  if (!rawDate) return new Date().toISOString().split('T')[0];
+  const s = String(rawDate).trim();
+  if (s.startsWith('*') || s.length < 5) {
+    return new Date().toISOString().split('T')[0];
+  }
+
+  // Handle slashes: DD/MM/YYYY or DD/MM/YY or YYYY/MM/DD
+  if (s.includes('/')) {
+    const parts = s.split('/');
+    if (parts.length === 3) {
+      let [p0, p1, p2] = parts;
+      if (p2.length === 2) {
+        const yr = parseInt(p2, 10);
+        p2 = String(yr < 70 ? 2000 + yr : 1900 + yr);
+      }
+      if (p0.length === 4) {
+        // YYYY/MM/DD
+        return `${p0}-${p1.padStart(2, '0')}-${p2.padStart(2, '0')}`;
+      }
+      // DD/MM/YYYY
+      return `${p2}-${p1.padStart(2, '0')}-${p0.padStart(2, '0')}`;
+    }
+  }
+
+  // Handle dashes: DD-MM-YYYY or DD-MM-YY or DD-Mon-YYYY or YYYY-MM-DD
+  if (s.includes('-')) {
+    const parts = s.split('-');
+    if (parts.length === 3) {
+      let [p0, p1, p2] = parts;
+      if (p0.length === 4) {
+        // YYYY-MM-DD
+        return `${p0}-${p1.padStart(2, '0')}-${p2.padStart(2, '0')}`;
+      }
+      if (p2.length === 2) {
+        const yr = parseInt(p2, 10);
+        p2 = String(yr < 70 ? 2000 + yr : 1900 + yr);
+      }
+      const months: Record<string, string> = {
+        jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+        jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12'
+      };
+      if (months[p1.toLowerCase()]) {
+        p1 = months[p1.toLowerCase()];
+      }
+      // DD-MM-YYYY
+      return `${p2}-${p1.padStart(2, '0')}-${p0.padStart(2, '0')}`;
+    }
+  }
+
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) {
+    return d.toISOString().split('T')[0];
+  }
+  return new Date().toISOString().split('T')[0];
+}
+
+/**
  * Normalizes a single raw transaction row
  */
 export function normalizeBankTransaction(
@@ -442,20 +503,26 @@ export function normalizeBankTransaction(
   } else if (!matchedSignature) {
     // Heuristic categorization
     const lower = rawText.toLowerCase();
-    if (/grocery|fruits|provisions|supermarket|vegetables/i.test(lower)) {
+    if (/restaurant|cafe|dhaba|bhojanalaya|food|bites|bakery|bake|dairy|sweets|tea|chai|coffee|tiffin|canteen|kitchen|dine|dining|grocery|fruits|provisions|supermarket|vegetables|pizza|burger|snack|meat|fish|juice|swiggy|zomato|blinkit|zepto|dominos/i.test(lower)) {
       category = 'Food & Dining';
-    } else if (/uber|ola|metro|fuel|petrol|transit|flight|train/i.test(lower)) {
+    } else if (/traders|trade|store|retail|enterprises|mart|bazaar|mall|clothing|fashion|apparel|footwear|electronics|shop|jewel|optics|hardware|stationary|stationery|book|amazon|flipkart|myntra/i.test(lower)) {
+      category = 'Shopping & Personal';
+    } else if (/uber|ola|rapido|metro|fuel|petrol|diesel|gas|transit|flight|airline|train|irctc|auto|parking|toll|fastag|redbus/i.test(lower)) {
       category = 'Transportation';
-    } else if (/gym|fitness|cult|pharmacy|medplus|apollo/i.test(lower)) {
+    } else if (/gym|fitness|cult|pharmacy|medplus|apollo|hospital|clinic|doctor|diagnostics|dental/i.test(lower)) {
       category = 'Health & Fitness';
-    } else if (/netflix|prime|hotstar|spotify|cinema|bookmyshow/i.test(lower)) {
+    } else if (/netflix|prime|hotstar|spotify|cinema|movie|bookmyshow|theatre|youtube|audible/i.test(lower)) {
       category = 'Entertainment';
-    } else if (/zerodha|groww|mutual|fund|sip|securities/i.test(lower)) {
+    } else if (/subscription|membership|recharge|billdesk|annual plan|monthly pack/i.test(lower)) {
+      category = 'Subscriptions';
+    } else if (/zerodha|groww|mutual|fund|sip|securities|indmoney|upstox|angel one|smallcase|stock|invest/i.test(lower)) {
       category = 'Investments';
-    } else if (/rent|society|maintenance/i.test(lower)) {
+    } else if (/rent|society|maintenance|housing|pg /i.test(lower)) {
       category = 'Housing & Rent';
-    } else if (/airtel|jio|fiber|broadband|electricity|water|utility/i.test(lower)) {
+    } else if (/airtel|jio|fiber|broadband|electricity|water|utility|bescom|tneb|power/i.test(lower)) {
       category = 'Utilities';
+    } else if (/upi-|upi\/|neft|imps|rtgs|transfer|cashback|splitwise/i.test(lower)) {
+      category = 'Financial & Transfers';
     }
   }
 
@@ -472,20 +539,7 @@ export function normalizeBankTransaction(
     : ['Housing & Rent', 'Utilities', 'Daily Groceries'].includes(category);
 
   // Parse date into standard YYYY-MM-DD
-  let normalizedDate = input.date;
-  if (normalizedDate && normalizedDate.includes('/')) {
-    // Check if DD/MM/YYYY or MM/DD/YYYY
-    const parts = normalizedDate.split('/');
-    if (parts.length === 3) {
-      if (parts[2].length === 4) {
-        // DD/MM/YYYY
-        normalizedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-      } else if (parts[0].length === 4) {
-        // YYYY/MM/DD
-        normalizedDate = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-      }
-    }
-  }
+  let normalizedDate = parseNormalizedDate(input.date);
 
   // Closing balance if provided
   let balanceAfter: number | undefined;

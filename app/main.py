@@ -3,6 +3,14 @@ FinSense: Forecast-Grounded Personal Finance Intelligence Platform.
 FastAPI Application Entrypoint.
 """
 
+import sys
+from pathlib import Path
+
+# Ensure project root is always in sys.path regardless of how python is invoked
+_project_root = Path(__file__).resolve().parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
 from contextlib import asynccontextmanager
 from datetime import datetime
 from fastapi import FastAPI
@@ -71,11 +79,20 @@ from pathlib import Path
 _frontend_dist = Path(__file__).resolve().parent / "frontend" / "dist"
 if _frontend_dist.exists():
     app.mount("/dashboard", StaticFiles(directory=str(_frontend_dist), html=True), name="dashboard")
+    _assets_dist = _frontend_dist / "assets"
+    if _assets_dist.exists():
+        app.mount("/assets", StaticFiles(directory=str(_assets_dist)), name="assets")
+
+
+from fastapi import Request
+from fastapi.responses import RedirectResponse
 
 
 @app.get("/")
-def root():
-    """Root metadata endpoint."""
+def root(request: Request):
+    """Root metadata endpoint or frontend redirect for browsers."""
+    if "text/html" in request.headers.get("accept", "") and _frontend_dist.exists():
+        return RedirectResponse(url="/dashboard")
     return {
         "platform": "FinSense",
         "tagline": "Forecast-Grounded Financial Copilot",

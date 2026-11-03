@@ -82,11 +82,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
 export function useFinanceContext(): FinanceStoreContextType {
   const ctx = useContext(FinanceContext);
-  if (!ctx) {
-    // Fallback to hook directly if outside provider
-    return useBaseFinanceStore() as unknown as FinanceStoreContextType;
-  }
-  return ctx;
+  const fallbackStore = useBaseFinanceStore();
+  return (ctx || fallbackStore) as unknown as FinanceStoreContextType;
 }
 
 export {

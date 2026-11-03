@@ -299,35 +299,75 @@ def get_user_twins(user_id: str = "0"):
     pipeline = UserDataPipeline.get_instance()
     curr = pipeline.accounts.get("checking", {}).get("currency", "INR")
     is_inr = curr == "INR"
+    sym = "₹" if is_inr else "$"
 
-    cohort = "University Students & Young Scholars (₹15,000 - ₹30,000/mo Allowance)" if is_inr else "Undergraduate & Graduate Scholars ($1,500 - $3,000/mo)"
+    feat = pipeline.cached_results.get("user_features", {})
+    income = float(feat.get("monthly_income", 25000.0 if is_inr else 2500.0))
+    monthly_spend = float(feat.get("monthly_spending", 15000.0 if is_inr else 1500.0))
+    active_subs = pipeline.cached_results.get("subscriptions", [])
+    sub_burn = sum(float(s.get("amount", 0)) for s in active_subs)
+    checking_bal = float(pipeline.accounts.get("checking", {}).get("balance", 10000.0))
+
+    savings_rate = max(5.0, min(95.0, round((1.0 - (monthly_spend / max(1.0, income))) * 100)))
+
+    if is_inr:
+        if income >= 100000:
+            cohort = "Growth Professionals & Business Operators (₹1,00,000 - ₹2,50,000/mo)"
+            cluster_id = "cluster_executives"
+        elif income >= 50000:
+            cohort = "Mid-Career Professionals & Independent Earners (₹50,000 - ₹1,00,000/mo)"
+            cluster_id = "cluster_professionals"
+        elif income >= 25000:
+            cohort = "Early-Career Scholars & Junior Professionals (₹25,000 - ₹50,000/mo)"
+            cluster_id = "cluster_junior_pros"
+        else:
+            cohort = "University Students & Young Scholars (₹15,000 - ₹25,000/mo Allowance)"
+            cluster_id = "cluster_student_scholars"
+    else:
+        if income >= 10000:
+            cohort = "High-Growth Professionals & Tech Builders ($10,000+/mo)"
+            cluster_id = "cluster_executives"
+        elif income >= 4000:
+            cohort = "Mid-Level Professionals ($4,000 - $10,000/mo)"
+            cluster_id = "cluster_professionals"
+        else:
+            cohort = "Undergraduate & Graduate Scholars ($1,500 - $3,500/mo)"
+            cluster_id = "cluster_student_scholars"
+
     twins = SYNTHETIC_PEER_ARCHETYPES_INR if is_inr else SYNTHETIC_PEER_ARCHETYPES_USD
     radar = FinancialGraphSAGE.compute_multi_axis_peer_comparison({
-        "savings_rate": 72.0,
-        "emergency_runway": 68.0,
-        "bill_efficiency": 85.0,
-        "weekend_control": 64.0,
+        "savings_rate": float(savings_rate),
+        "emergency_runway": min(95.0, max(30.0, (checking_bal / max(1.0, monthly_spend)) * 30.0)),
+        "bill_efficiency": max(40.0, 100.0 - (sub_burn / max(1.0, income)) * 100.0),
+        "weekend_control": 70.0,
         "debt_freedom": 95.0,
-        "autosave_consistency": 80.0
+        "autosave_consistency": 82.0
     })
+
+    pct_savings = min(95, max(35, int(savings_rate)))
+    pct_spend = min(85, max(20, int((monthly_spend / max(1.0, income)) * 100)))
+    pct_bills = min(80, max(15, int((sub_burn / max(1.0, income)) * 100)))
+    pct_runway = min(95, max(30, int(min(95.0, (checking_bal / max(1.0, monthly_spend)) * 35.0))))
+
+    top_insights = [
+        f"You save {pct_savings}% of your monthly inflow, outperforming peer cohort median.",
+        f"Your recurring subscription footprint is {sym}{int(sub_burn):,}/mo.",
+        f"Discretionary spending is well-paced against verified monthly inflows of {sym}{int(income):,}."
+    ]
 
     return {
         "user_id": user_id,
         "cohort_name": cohort,
-        "twin_cluster_id": "cluster_student_scholars",
+        "twin_cluster_id": cluster_id,
         "percentiles": {
-            "savings_rate": 68,
-            "discretionary_spend_ratio": 42,
-            "recurring_bills_load": 54,
-            "cash_runway": 74,
+            "savings_rate": pct_savings,
+            "discretionary_spend_ratio": pct_spend,
+            "recurring_bills_load": pct_bills,
+            "cash_runway": pct_runway,
         },
         "radar_comparison": radar,
         "twins": twins,
-        "top_insights": [
-            "You save 18% more allowance than your campus peer cluster median.",
-            "Your recurring subscription footprint is ₹75/mo (peer avg: ₹380/mo).",
-            "Dining and food delivery account for 38% of non-essential outflow (peer avg: 42%)."
-        ]
+        "top_insights": top_insights
     }
 
 

@@ -38,9 +38,8 @@ def get_spending_forecast(
         curr = pipeline.accounts["checking"].get("currency", "INR")
         initial_balance = float(pipeline.accounts["checking"]["balance"])
         feat = pipeline.cached_results.get("user_features", {})
-        # Real student average daily spend from statement: ~₹293.97/day (~₹8,820/mo)
         monthly_spend = float(feat.get("monthly_spending", 8820.0 if curr == "INR" else 1200.0))
-        typical_daily = max(50.0, min(monthly_spend / 30.0, 350.0 if curr == "INR" else 45.0))
+        typical_daily = max(20.0, monthly_spend / 30.0)
 
         if scenario == "conservative":
             initial_balance = initial_balance * 0.90
@@ -59,9 +58,22 @@ def get_spending_forecast(
         cumulative_balance = initial_balance
         total_projected_spend = 0.0
 
-        # Real student allowance inflow (e.g. Anand Sevd monthly family pocket money: ₹5,000)
-        allowance_inflow = 5000.0 if curr == "INR" else 600.0
-        safe_floor = 1500.0 if curr == "INR" else 300.0
+        # Ground recurring inflow dynamically in real statement transactions
+        raw_income = float(feat.get("monthly_income", 0.0))
+        if raw_income <= 0.0:
+            inflows = [t["amount"] for t in pipeline.raw_transactions if t.get("is_income") or t.get("type") in ("income", "credit")]
+            if inflows:
+                dates = [pd.to_datetime(t["date"], errors="coerce") for t in pipeline.raw_transactions if t.get("date")]
+                valid_dates = [d for d in dates if pd.notnull(d)]
+                if valid_dates:
+                    days_span = max(1, (max(valid_dates) - min(valid_dates)).days + 1)
+                    m_span = max(1.0, days_span / 30.417)
+                else:
+                    m_span = 1.0
+                raw_income = round(sum(inflows) / m_span, 2)
+
+        allowance_inflow = round(raw_income, 2) if raw_income > 0 else round(monthly_spend * 1.25, 2)
+        safe_floor = round(max(1500.0 if curr == "INR" else 200.0, monthly_spend * 0.15), 2)
         inflow_days = {1: allowance_inflow}
         if horizon == 90:
             inflow_days.update({31: allowance_inflow, 61: allowance_inflow})

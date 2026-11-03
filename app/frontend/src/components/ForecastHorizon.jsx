@@ -330,10 +330,12 @@ export default function ForecastHorizon({ forecastData, onHorizonChange, current
                 const pt = points[pIdx];
                 const px = getX(pIdx);
                 const py = getY(isSpend ? pt.predicted_spend : pt.projected_balance);
+                const inflowLabel = `Expected Inflow (+${format(pt.expected_inflow, { decimals: 0 })})`;
+                const pillWidth = Math.max(160, inflowLabel.length * 7.5 + 28);
                 return (
-                  <g key="milestone-inflow" transform={`translate(${Math.max(padding.left, px - 75)}, ${Math.max(padding.top + 5, py - 32)})`}>
+                  <g key="milestone-inflow" transform={`translate(${Math.max(padding.left, px - pillWidth / 2)}, ${Math.max(padding.top + 5, py - 32)})`}>
                     <rect
-                      width="150"
+                      width={pillWidth}
                       height="22"
                       rx="11"
                       fill="#F0FDF4"
@@ -342,7 +344,7 @@ export default function ForecastHorizon({ forecastData, onHorizonChange, current
                     />
                     <circle cx="12" cy="11" r="3.5" fill="#0D9488" />
                     <text x="22" y="14.5" fill="#0D9488" fontSize="10" fontWeight="700" fontFamily="sans-serif">
-                      Allowance (+{format(pt.expected_inflow, { decimals: 0 })})
+                      {inflowLabel}
                     </text>
                   </g>
                 );
@@ -498,7 +500,7 @@ export default function ForecastHorizon({ forecastData, onHorizonChange, current
             Safe Buffer Above {format(forecastData.safe_floor_threshold || 2000, { decimals: 0 })}
           </span>
           <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0D9488', fontFamily: 'var(--font-mono)' }}>
-            +{format(Math.max(0, (forecastData.initial_balance || 10754.62) - (forecastData.safe_floor_threshold || 2000)), { decimals: 0 })} <span style={{ fontSize: '0.75rem', color: '#10B981', fontWeight: 600 }}>(Safe)</span>
+            +{format(Math.max(0, (forecastData.initial_balance ?? 0.0) - (forecastData.safe_floor_threshold || 2000)), { decimals: 0 })} <span style={{ fontSize: '0.75rem', color: '#10B981', fontWeight: 600 }}>(Safe)</span>
           </div>
         </div>
 

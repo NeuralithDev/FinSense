@@ -39,6 +39,9 @@ import confetti from 'canvas-confetti';
 import { useFinanceStore } from '../store/financeStore';
 import { useCurrency } from '../design-system/currencyStore';
 import { normalizeBankTransaction } from '../utils/transactionNormalizer';
+import { useAuth } from '../store/authStore';
+import { uploadStatementCSV } from '../services/api';
+
 
 // Realistic 90-Day Raw HDFC/UPI Bank Statement CSV Generator
 function generateSampleBankCsv(): string {
@@ -81,8 +84,14 @@ export default function ConnectBankModal() {
     importRawBankStatement,
     simulateWebhookCharge,
     resetToDemoData,
+    clearImportedData,
+    hasImportedData,
+    activeStatementMeta,
     accounts,
   } = useFinanceStore();
+
+  const { user } = useAuth();
+
 
   const { format, currency } = useCurrency();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -101,6 +110,8 @@ export default function ConnectBankModal() {
   const [rawText, setRawText] = useState('');
   const [uploadedFileName, setUploadedFileName] = useState('');
   const [parsedPreview, setParsedPreview] = useState<any[]>([]);
+  const [fullParsedRows, setFullParsedRows] = useState<any[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
   const [columnMapping, setColumnMapping] = useState<any>(null);
   const [detectedBalance, setDetectedBalance] = useState<number | null>(null);
   const [detectedBankName, setDetectedBankName] = useState('HDFC Bank');
@@ -261,13 +272,21 @@ export default function ConnectBankModal() {
     const parsedRows: any[] = [];
     for (let i = headerIdx + 1; i < lines.length; i++) {
       const rowStr = lines[i];
-      if (!rowStr || rowStr.startsWith('---') || rowStr.includes('Total')) continue;
+      if (!rowStr) continue;
+      const upper = rowStr.toUpperCase();
+      if (upper.includes('STATEMENT SUMMARY') || upper.includes('END OF STATEMENT') || (upper.includes('OPENING BALANCE') && upper.includes('CLOSING BAL'))) {
+        break;
+      }
+      if (rowStr.startsWith('---') || rowStr.startsWith('***') || rowStr.includes('Total') || upper.includes('GENERATED ON:')) continue;
 
       const cells = rowStr.split(separator).map((c) => c.trim().replace(/^["']|["']$/g, ''));
       if (cells.length < 2) continue;
 
-      const dateVal = dateCol !== -1 ? cells[dateCol] : new Date().toISOString().split('T')[0];
+      const rawDate = dateCol !== -1 ? cells[dateCol] : '';
+      if (!rawDate || rawDate.startsWith('*') || rawDate.toLowerCase().includes('date')) continue;
+
       const descVal = descCol !== -1 ? cells[descCol] : 'Everyday Bank Transaction';
+      if (!descVal || descVal.startsWith('*')) continue;
       
       let debitVal = debitCol !== -1 ? parseFloat(cells[debitCol]?.replace(/[^\d.-]/g, '')) || 0 : 0;
       let creditVal = creditCol !== -1 ? parseFloat(cells[creditCol]?.replace(/[^\d.-]/g, '')) || 0 : 0;
@@ -294,9 +313,9 @@ export default function ConnectBankModal() {
         }
       }
 
-      if (amount > 0 || descVal.length > 3) {
+      if (amount > 0) {
         parsedRows.push({
-          date: dateVal,
+          date: rawDate,
           narration: descVal,
           description: descVal,
           amount: Math.abs(amount),
@@ -306,6 +325,7 @@ export default function ConnectBankModal() {
       }
     }
 
+    setFullParsedRows(parsedRows);
     setDetectedBalance(closingBal || 10754.62);
 
     // Normalize for preview
@@ -313,73 +333,49 @@ export default function ConnectBankModal() {
     setParsedPreview(normalizedPreview);
   };
 
-  const handleExecuteImport = () => {
+  const handleExecuteImport = async () => {
     if (!rawText) return;
+    try {
+      setIsImporting(true);
 
-    // Reparse full row list
-    const lines = rawText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-    let headerIdx = 0;
-    for (let i = 0; i < Math.min(lines.length, 30); i++) {
-      const lineLow = lines[i].toLowerCase();
-      if (lineLow.includes('date') && (lineLow.includes('narration') || lineLow.includes('withdrawal') || lineLow.includes('amount') || lineLow.includes('balance'))) {
-        headerIdx = i;
-        break;
+      const rowsToImport = fullParsedRows.length > 0 ? fullParsedRows : parsedPreview;
+      if (!rowsToImport || rowsToImport.length === 0) {
+        console.warn('No parsed transactions available to import');
+        return;
       }
+
+      const effectiveHolder = user?.name || 'Account Holder';
+      const effectiveMask = '••••';
+
+      // 1. Sync raw statement with backend API
+      if (rawText) {
+        try {
+          await uploadStatementCSV(rawText, 'csv', null, 'checking', uploadedFileName || 'uploaded_statement.csv');
+        } catch (err) {
+          console.warn('Backend statement upload notice:', err);
+        }
+      }
+
+      // 2. Ingest into client store and trigger models recalibration
+      importRawBankStatement({
+        rawRows: rowsToImport,
+        fileName: uploadedFileName || 'uploaded_statement.csv',
+        closingBalance: detectedBalance,
+        institution: detectedBankName,
+        accountNumberMask: effectiveMask,
+        holderName: effectiveHolder,
+      });
+
+      confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+      window.dispatchEvent(new CustomEvent('finsense_statement_imported'));
+      closeSyncModal();
+    } catch (err) {
+      console.error('Import execution error:', err);
+    } finally {
+      setIsImporting(false);
     }
-
-    const separator = lines[headerIdx].includes('\t') ? '\t' : ',';
-    const rawHeaders = lines[headerIdx].split(separator).map((h) => h.trim().replace(/^["']|["']$/g, '').toLowerCase());
-
-    let dateCol = rawHeaders.findIndex((h) => h.includes('date'));
-    let descCol = rawHeaders.findIndex((h) => h.includes('narration') || h.includes('remark') || h.includes('description') || h.includes('particular'));
-    let wdlCol = rawHeaders.findIndex((h) => h.includes('withdrawal') || h.includes('debit') || h === 'dr');
-    let depCol = rawHeaders.findIndex((h) => h.includes('deposit') || h.includes('credit') || h === 'cr');
-    let balCol = rawHeaders.findIndex((h) => h.includes('balance'));
-
-    if (descCol === -1) descCol = 1;
-    if (dateCol === -1) dateCol = 0;
-
-    const fullRows: any[] = [];
-    let latestClosingBal: number | null = null;
-
-    for (let i = headerIdx + 1; i < lines.length; i++) {
-      const cells = lines[i].split(separator).map((c) => c.trim().replace(/^["']|["']$/g, ''));
-      if (cells.length < 2) continue;
-
-      const d = cells[dateCol] || '2026-10-21';
-      const desc = cells[descCol] || 'Transaction';
-      const wdl = wdlCol !== -1 ? parseFloat(cells[wdlCol]?.replace(/[^\d.-]/g, '')) || 0 : 0;
-      const dep = depCol !== -1 ? parseFloat(cells[depCol]?.replace(/[^\d.-]/g, '')) || 0 : 0;
-
-      if (balCol !== -1 && cells[balCol] && latestClosingBal === null) {
-        const parsedBal = parseFloat(cells[balCol].replace(/[^\d.-]/g, ''));
-        if (!isNaN(parsedBal)) latestClosingBal = parsedBal;
-      }
-
-      const amt = wdl > 0 ? wdl : dep > 0 ? dep : 0;
-      if (amt > 0) {
-        fullRows.push({
-          date: d,
-          narration: desc,
-          amount: amt,
-          type: dep > 0 ? 'income' : 'debit',
-          balance: latestClosingBal,
-        });
-      }
-    }
-
-    importRawBankStatement({
-      rawRows: fullRows,
-      fileName: uploadedFileName || 'uploaded_statement.csv',
-      closingBalance: detectedBalance || latestClosingBal,
-      institution: detectedBankName,
-      accountNumberMask: '2708',
-      holderName: 'Mudit Sharma',
-    });
-
-    confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
-    closeSyncModal();
   };
+
 
   const handleDownloadSampleCsv = () => {
     const csvData = generateSampleBankCsv();
@@ -671,8 +667,65 @@ export default function ConnectBankModal() {
                 }}
               />
 
+              {hasImportedData && (
+                <div
+                  style={{
+                    background: 'rgba(59, 130, 246, 0.08)',
+                    border: '1px solid rgba(59, 130, 246, 0.25)',
+                    borderRadius: '12px',
+                    padding: '12px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '10px',
+                    marginBottom: '16px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Database size={16} color="#3B82F6" />
+                    <div>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        Currently Loaded: {activeStatementMeta?.fileName || 'Active Statement'}
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                        Uploading a new file will replace this statement. Or delete it to reset to zero-state.
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Delete the active statement and purge all associated transactions?')) {
+                        clearImportedData();
+                        setParsedPreview([]);
+                        setFullParsedRows([]);
+                        setUploadedFileName('');
+                        setRawText('');
+                      }
+                    }}
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.1)',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      color: '#EF4444',
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      fontSize: '0.74rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                    }}
+                  >
+                    <Trash2 size={13} />
+                    <span>Delete Existing Statement</span>
+                  </button>
+                </div>
+              )}
+
               <div
                 onDragEnter={handleDrag}
+
                 onDragOver={handleDrag}
                 onDragLeave={handleDrag}
                 onDrop={handleDrop}
@@ -784,23 +837,25 @@ export default function ConnectBankModal() {
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
                     <button
                       onClick={handleExecuteImport}
+                      disabled={isImporting}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: '8px',
                         padding: '10px 20px',
                         borderRadius: '10px',
-                        background: '#0D9488',
+                        background: isImporting ? '#0F766E' : '#0D9488',
                         color: '#FFFFFF',
                         border: 'none',
                         fontSize: '0.86rem',
                         fontWeight: 700,
-                        cursor: 'pointer',
+                        cursor: isImporting ? 'not-allowed' : 'pointer',
                         boxShadow: '0 4px 12px rgba(13, 148, 136, 0.3)',
+                        opacity: isImporting ? 0.75 : 1,
                       }}
                     >
                       <Sparkles size={16} />
-                      <span>Ingest & Calibrate Dashboard</span>
+                      <span>{isImporting ? 'Ingesting & Calibrating...' : 'Ingest & Calibrate Dashboard'}</span>
                       <ArrowRight size={16} />
                     </button>
                   </div>

@@ -143,6 +143,7 @@ def upload_statement(payload: Dict[str, Any]):
     try:
         content = payload.get("content", "")
         file_type = payload.get("file_type", "csv")
+        file_name = payload.get("file_name", None)
         password = payload.get("password", None)
         account_type = payload.get("account_type", "checking")
 
@@ -154,7 +155,8 @@ def upload_statement(payload: Dict[str, Any]):
             content,
             file_type=file_type,
             password=password,
-            account_type=account_type
+            account_type=account_type,
+            file_name=file_name
         )
 
         detected_curr = pipeline.accounts.get("checking", {}).get("currency", "INR")
@@ -167,12 +169,55 @@ def upload_statement(payload: Dict[str, Any]):
             "total_transactions": len(pipeline.raw_transactions),
             "accounts": pipeline.accounts,
             "account_summary": account_summary,
+            "statement_meta": pipeline.active_statement_meta,
             "pipeline_summary": results
         }
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Statement ingestion error: {str(e)}")
+
+
+@router.delete("/statement")
+def delete_uploaded_statement(user_id: str = "0"):
+    """
+    Permanently deletes the uploaded statement and all associated transactions for the user,
+    purging the SQLite database and resetting to a pristine zero-state.
+    """
+    try:
+        pipeline = UserDataPipeline.get_instance()
+        return pipeline.reset_to_clean_slate(user_id=user_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Statement deletion error: {str(e)}")
+
+
+@router.post("/reset")
+def reset_user_ledger(payload: Optional[Dict[str, Any]] = None):
+    """
+    Resets the user financial ledger and accounts to clean zero-state (unlinked).
+    """
+    try:
+        body = payload or {}
+        user_id = str(body.get("user_id", "0"))
+        pipeline = UserDataPipeline.get_instance()
+        return pipeline.reset_to_clean_slate(user_id=user_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ledger reset error: {str(e)}")
+
+
+@router.post("/demo/seed")
+def seed_demo_sandbox_portfolio(payload: Optional[Dict[str, Any]] = None):
+    """
+    Explicitly seeds the sample student portfolio for demo testing on demand.
+    """
+    try:
+        body = payload or {}
+        user_id = str(body.get("user_id", "0"))
+        pipeline = UserDataPipeline.get_instance()
+        return pipeline.seed_demo_sandbox(user_id=user_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Demo seed error: {str(e)}")
+
 
 
 @router.get("/accounts")

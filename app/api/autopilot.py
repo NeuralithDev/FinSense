@@ -132,12 +132,21 @@ def get_user_autopilot_state(user_id: str = "0"):
     pipeline = UserDataPipeline.get_instance()
     curr = pipeline.accounts["checking"].get("currency", "INR")
     balance = float(pipeline.accounts["checking"]["balance"])
+    feat = pipeline.cached_results.get("user_features", {})
+    monthly_spend = float(feat.get("monthly_spending", 15000.0 if curr == "INR" else 1500.0))
+    safety_buf = max(1500.0 if curr == "INR" else 250.0, round(monthly_spend * 0.15, 2))
+
     safe_sweep = pipeline.cached_results.get("safe_sweep", {})
-    sweep_amt = float(safe_sweep.get("safe_sweep_amount", 500.0 if curr == "INR" else 50.0))
-    sweep_amt = min(sweep_amt, 850.0 if curr == "INR" else 100.0)
-    is_paused = bool(safe_sweep.get("is_paused", False))
+    calculated_sweep = float(safe_sweep.get("safe_sweep_amount", 0.0))
+    if calculated_sweep > 0:
+        sweep_amt = calculated_sweep
+    elif balance > safety_buf:
+        sweep_amt = round(min(balance - safety_buf, max(500.0 if curr == "INR" else 50.0, (balance - safety_buf) * 0.2)), 2)
+    else:
+        sweep_amt = 0.0
+
+    is_paused = bool(safe_sweep.get("is_paused", False)) or (balance <= safety_buf)
     symbol = "₹" if curr == "INR" else "$"
-    safety_buf = 1500.0 if curr == "INR" else 300.0
 
     allocations = []
     rem = sweep_amt

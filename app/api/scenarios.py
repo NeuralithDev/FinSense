@@ -29,10 +29,12 @@ def evaluate_purchase_affordability(request: AffordabilityRequest):
         sym = "₹" if curr == "INR" else "$"
 
         cost = float(request.purchase_amount)
-        # Pull real account balances from pipeline if defaults passed
-        checking = float(pipeline.accounts.get("checking", {}).get("balance", request.checking_balance))
-        savings = float(pipeline.accounts.get("savings", {}).get("balance", 0.0))
-        buffer = float(request.safety_buffer or 2000.0)
+        # Use client balances if provided, otherwise pull from live pipeline accounts
+        pipeline_checking = float(pipeline.accounts.get("checking", {}).get("balance", 0.0))
+        pipeline_savings = float(pipeline.accounts.get("savings", {}).get("balance", 0.0))
+        checking = float(request.checking_balance if request.checking_balance is not None and request.checking_balance > 0 else pipeline_checking)
+        savings = float(request.savings_balance if request.savings_balance is not None and request.savings_balance > 0 else pipeline_savings)
+        buffer = float(request.safety_buffer if request.safety_buffer is not None and request.safety_buffer > 0 else 2000.0)
         
         # Monthly burn rate
         burn = max(1000.0, float(request.monthly_fixed_bills + request.forecasted_monthly_spend_mean))
@@ -128,6 +130,8 @@ def simulate_scenario(payload: Dict[str, Any]):
             new_recurring_commitment=float(payload.get("new_recurring_commitment", 0.0)),
             one_time_expenses=payload.get("one_time_expenses")
         )
+        if hasattr(trajectory.get("trajectory"), "to_dict"):
+            trajectory["trajectory"] = trajectory["trajectory"].to_dict(orient="records")
         return trajectory
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Scenario simulation error: {str(e)}")

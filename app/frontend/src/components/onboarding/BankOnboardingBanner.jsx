@@ -9,7 +9,8 @@ import {
   Database,
   Lock,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Trash2
 } from 'lucide-react';
 import { useFinanceStore } from '../../store/financeStore';
 import { useAuth } from '../../store/authStore';
@@ -20,7 +21,9 @@ export default function BankOnboardingBanner() {
     isDemoMode, 
     openSyncModal, 
     loadDemoData, 
-    clearImportedData 
+    clearImportedData,
+    activeStatementMeta,
+    transactions
   } = useFinanceStore();
   const { user } = useAuth();
 
@@ -109,8 +112,116 @@ export default function BankOnboardingBanner() {
     );
   }
 
-  // If already has real data, do not show onboarding hero
-  if (hasImportedData) return null;
+  // If already has real data, show discrete active statement management banner
+  if (hasImportedData) {
+    return (
+      <div
+        style={{
+          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.03) 100%)',
+          border: '1px solid rgba(16, 185, 129, 0.28)',
+          borderRadius: '12px',
+          padding: '12px 18px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px',
+          marginBottom: '20px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '8px',
+              background: 'rgba(16, 185, 129, 0.16)',
+              color: '#10B981',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <FileText size={17} />
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                Active Statement: {activeStatementMeta?.fileName || 'Uploaded Bank Statement'}
+              </span>
+              <span
+                style={{
+                  fontSize: '0.68rem',
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: '6px',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  color: '#10B981',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                }}
+              >
+                REAL DATA ACTIVE
+              </span>
+            </div>
+            <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+              {activeStatementMeta?.institution || 'Bank'} &bull; {transactions?.length || activeStatementMeta?.rowsCount || 0} Transactions &bull; Account: {userName}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            onClick={openSyncModal}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-subtle)',
+              color: 'var(--text-primary)',
+              fontSize: '0.76rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <Sparkles size={13} color="#0D9488" />
+            <span>Upload New Statement</span>
+          </button>
+
+          <button
+            onClick={() => {
+              if (window.confirm('Delete this statement and remove all associated transactions and account data from FinSense?')) {
+                clearImportedData();
+              }
+            }}
+            title="Delete this uploaded statement and reset to clean zero-state"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              background: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.28)',
+              color: '#EF4444',
+              fontSize: '0.76rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <Trash2 size={13} />
+            <span>Delete Statement</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
 
   // ROCKET MONEY / COPILOT STYLE ZERO-STATE ONBOARDING ACTION CENTER
   return (

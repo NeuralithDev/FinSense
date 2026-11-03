@@ -27,11 +27,18 @@ export default function AnomalyGuardModule() {
   const [filterMode, setFilterMode] = useState('ALL'); // ALL, CRITICAL, WATCHLIST
   const [feedbackState, setFeedbackState] = useState({});
   const { openInspector } = useMetricInspector();
-  const { anomalies: storeAnomalies, resolveAnomaly } = useFinanceStore();
+  const { anomalies: storeAnomalies, resolveAnomaly, activeStatementMeta } = useFinanceStore();
 
   useEffect(() => {
     loadAnomalies();
-  }, []);
+    const handleStatementImport = () => {
+      loadAnomalies();
+    };
+    window.addEventListener('finsense_statement_imported', handleStatementImport);
+    return () => {
+      window.removeEventListener('finsense_statement_imported', handleStatementImport);
+    };
+  }, [activeStatementMeta]);
 
   const loadAnomalies = async () => {
     try {

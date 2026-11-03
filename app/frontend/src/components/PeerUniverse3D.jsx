@@ -24,7 +24,8 @@ import { useCurrency } from '../design-system/currencyStore';
 import { useTheme } from '../design-system/themeStore';
 
 export default function PeerUniverse3D() {
-  const { format, currency, symbol } = useCurrency();
+  const { format, currency } = useCurrency();
+  const symbol = currency?.symbol || '₹';
   const { isDark } = useTheme();
 
   const canvasRef = useRef(null);

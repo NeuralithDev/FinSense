@@ -50,36 +50,48 @@ class TransactionNormalizer:
     CATEGORY_KEYWORDS = {
         "Income": [
             "payroll", "direct dep", "salary", "stipend", "bonus", "dividend",
-            "interest earned", "tax refund", "irs treas", "reimbursement"
+            "interest earned", "tax refund", "irs treas", "reimbursement", "cashback", "credit interest"
         ],
         "Housing & Rent": [
-            "rent", "mortgage", "apartments", "realty", "hoa fee", "leasing", "property mgmt"
+            "rent", "mortgage", "apartments", "realty", "hoa fee", "leasing", "property mgmt", "maintenance"
         ],
         "Utilities & Bills": [
             "electric", "water", "gas service", "pge", "coned", "national grid",
-            "at&t", "verizon", "t-mobile", "comcast", "xfinity", "spectrum", "internet", "trash"
+            "at&t", "verizon", "t-mobile", "comcast", "xfinity", "spectrum", "internet", "trash",
+            "airtel", "jio fiber", "broadband", "bescom", "tneb", "power dist"
         ],
         "Subscriptions": [
             "netflix", "spotify", "hulu", "disney", "apple music", "youtube premium",
             "gym", "fitness", "planet fitness", "equinox", "nyt", "audible", "icloud",
-            "amazon prime", "patreon", "substack", "hbo", "peacock"
+            "amazon prime", "patreon", "substack", "hbo", "peacock", "hotstar", "cult",
+            "membership", "recharge", "subscription"
         ],
         "Food & Dining": [
             "restaurant", "cafe", "coffee", "starbucks", "dunkin", "mcdonald", "chipotle",
             "burger", "pizza", "doordash", "ubereats", "grubhub", "postmates", "instacart",
-            "grocery", "supermarket", "whole foods", "trader joe", "kroger", "safeway", "swiggy", "zomato"
+            "grocery", "supermarket", "whole foods", "trader joe", "kroger", "safeway", "swiggy", "zomato",
+            "blinkit", "zepto", "fruits", "vegetables", "provisions", "bites", "sweets", "bakery", "bake",
+            "dairy", "tea", "chai", "dhaba", "canteen", "kitchen", "dining", "tiffin", "juice", "snack"
         ],
         "Transportation": [
             "uber", "lyft", "taxi", "metro", "transit", "subway", "train", "amtrak",
-            "gas station", "shell", "chevron", "bp oil", "exxon", "mobil", "parking", "toll"
+            "gas station", "shell", "chevron", "bp oil", "exxon", "mobil", "parking", "toll",
+            "rapido", "ola", "fastag", "fuel", "petrol", "diesel", "irctc", "redbus", "airline", "flight"
         ],
         "Shopping & Personal": [
             "target", "walmart", "amazon", "best buy", "costco", "cvs", "walgreens",
-            "pharmacy", "clothing", "apparel", "zara", "nike", "sephora", "ulta"
+            "pharmacy", "clothing", "apparel", "zara", "nike", "sephora", "ulta",
+            "trader", "traders", "retail", "mart", "store", "shop", "bazaar", "mall",
+            "enterprises", "stationery", "optics", "jewel", "hardware", "flipkart", "myntra"
+        ],
+        "Investments": [
+            "zerodha", "groww", "mutual fund", "sip", "securities", "indmoney", "upstox",
+            "angel one", "smallcase", "stock", "invest"
         ],
         "Financial & Transfers": [
             "transfer", "wire", "atm withdrawal", "credit card payment", "venmo transfer",
-            "cash app", "zelle", "brokerage", "fidelity", "vanguard", "schwab", "robinhood"
+            "cash app", "zelle", "brokerage", "fidelity", "vanguard", "schwab", "robinhood",
+            "upi-", "upi/", "neft", "imps", "rtgs", "supermoney", "cred", "paytm"
         ]
     }
 

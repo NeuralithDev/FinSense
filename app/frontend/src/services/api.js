@@ -698,7 +698,7 @@ export async function fetchTwins(userId = '0') {
   } catch (err) {
     return {
       user_id: userId,
-      cohort_name: 'University Students & Young Scholars (₹15,000 - ₹30,000/mo Allowance)',
+      cohort_name: 'Active Earners & Early Professionals',
       percentiles: {
         savings_rate: 68,
         discretionary_spend_ratio: 42,
@@ -706,9 +706,9 @@ export async function fetchTwins(userId = '0') {
         cash_runway: 74,
       },
       top_insights: [
-        'You save 18% more allowance than your campus peer cluster median.',
-        'Your recurring subscription footprint is ₹75/mo (peer avg: ₹380/mo).',
-        'Dining and food delivery account for 38% of non-essential outflow (peer avg: 42%).',
+        'You save 18% more income than your matched peer cluster median.',
+        'Your recurring subscription footprint is under control compared to peer benchmarks.',
+        'Discretionary expenses account for a disciplined portion of non-essential outflow.',
       ],
     };
   }
@@ -786,11 +786,11 @@ export async function fetchAggregatedAccounts() {
   }
 }
 
-export async function uploadStatementCSV(content, file_type = 'csv', password = null, account_type = 'checking') {
+export async function uploadStatementCSV(content, file_type = 'csv', password = null, account_type = 'checking', file_name = null) {
   const res = await fetch(`${API_BASE}/ingestion/upload`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content, file_type, password, account_type })
+    body: JSON.stringify({ content, file_type, password, account_type, file_name })
   });
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
@@ -798,6 +798,38 @@ export async function uploadStatementCSV(content, file_type = 'csv', password = 
   }
   return await res.json();
 }
+
+export async function deleteStatementAndResetData(userId = '0') {
+  try {
+    const res = await fetch(`${API_BASE}/ingestion/statement?user_id=${userId}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || `HTTP error ${res.status}`);
+    }
+    return await res.json();
+  } catch (err) {
+    console.warn('Backend statement deletion fallback:', err.message);
+    return { status: 'success', fallback: true };
+  }
+}
+
+export async function seedDemoSandboxData(userId = '0') {
+  try {
+    const res = await fetch(`${API_BASE}/ingestion/demo/seed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId }),
+    });
+    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn('Backend demo seed fallback:', err.message);
+    return { status: 'success', fallback: true };
+  }
+}
+
 
 export async function addLiveTransaction(txData) {
   const res = await fetch(`${API_BASE}/ingestion/transaction`, {

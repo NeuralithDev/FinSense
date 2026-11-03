@@ -29,7 +29,7 @@ const VELOCITY_MODES = {
     confidencePct: 'Extra Safe',
     safetyBuffer: 2500,
     baseSweep: 250.0,
-    description: 'Keeps extra cash in checking just in case semester expenses fluctuate.'
+    description: 'Keeps extra liquid cushion in checking to protect against unexpected lifestyle expenses.'
   },
   BALANCED: {
     id: 'BALANCED',
@@ -37,7 +37,7 @@ const VELOCITY_MODES = {
     confidencePct: 'Recommended',
     safetyBuffer: 1500,
     baseSweep: 500.0,
-    description: 'Best mix of growing your savings while staying 100% safe for bills.'
+    description: 'Best mix of growing your savings while staying 100% safe for upcoming bills.'
   },
   AGGRESSIVE: {
     id: 'AGGRESSIVE',
@@ -45,7 +45,7 @@ const VELOCITY_MODES = {
     confidencePct: 'High Growth',
     safetyBuffer: 1000,
     baseSweep: 1000.0,
-    description: 'Reach your goals faster when your monthly allowance is steady and predictable.'
+    description: 'Reach your goals faster when your monthly income and cash-flow are steady.'
   }
 };
 
@@ -58,7 +58,7 @@ export default function AutopilotHub({ autopilotData, onSweepExecuted }) {
   const { openInspector } = useMetricInspector();
   const { executeSweep, goals: storeGoals, accounts } = useFinanceStore();
 
-  const checkingBal = accounts?.checking?.balance || 10754.62;
+  const checkingBal = accounts?.checking?.balance ?? (autopilotData?.current_checking_balance ?? 0.0);
   const upcomingBills = 150.0;
 
   // Initial Goal State mapped from store if available

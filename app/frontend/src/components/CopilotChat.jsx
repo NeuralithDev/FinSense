@@ -28,9 +28,9 @@ export default function CopilotChat({ onNavigateTab }) {
     safeSweepAmount
   } = useFinanceStore();
 
-  const sweepVal = safeSweepAmount || 850.0;
-  const chkBal = accounts?.checking?.balance || 10754.62;
-  const savBal = accounts?.savings?.balance || 0.0;
+  const sweepVal = safeSweepAmount ?? 0.0;
+  const chkBal = accounts?.checking?.balance ?? 0.0;
+  const savBal = accounts?.savings?.balance ?? 0.0;
 
   const greetingReserveText = savBal > 0
     ? `, with an emergency reserve of **${format(savBal)}** secured in your reserve account`
@@ -58,7 +58,7 @@ export default function CopilotChat({ onNavigateTab }) {
   const messagesEndRef = useRef(null);
 
   const quickPrompts = [
-    'Can I afford a ₹24,990 gadget?',
+    `Can I afford a ${format(currency.code === 'INR' ? 24990 : 299)} gadget?`,
     'How much can I safely save today?',
     'What subscriptions am I paying for?',
     'What will my balance look like in 14 days?',
@@ -88,7 +88,7 @@ export default function CopilotChat({ onNavigateTab }) {
         ...prev,
         {
           sender: 'assistant',
-          text: `🎉 Transfer complete! **$${amt.toFixed(2)}** was successfully moved from Checking ($${(accounts.checking.balance - amt).toFixed(2)}) to your High-Yield Savings account and allocated to your Emergency Cushion.`,
+          text: `🎉 Transfer complete! **${format(amt)}** was successfully moved from Checking (${format(Math.max(0, accounts.checking.balance - amt))}) to your Savings account and allocated across your prioritized goals.`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
       ]);

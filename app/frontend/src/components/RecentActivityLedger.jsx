@@ -17,7 +17,9 @@ import {
   ShieldCheck,
   ChevronDown,
   PieChart,
-  Target
+  Target,
+  Trash2,
+  FileText
 } from 'lucide-react';
 import { useFinanceStore } from '../store/financeStore';
 import { useCurrency } from '../design-system/currencyStore';
@@ -29,49 +31,100 @@ export default function RecentActivityLedger() {
     accounts,
     transactions,
     hasImportedData,
+    isDemoMode,
+    activeStatementMeta,
     openSyncModal,
     loadDemoData,
+    clearImportedData,
     recategorizeTransaction,
     toggleRecurringTransaction,
   } = useFinanceStore();
+
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [editingCategoryTxId, setEditingCategoryTxId] = useState(null);
 
-  const categories = [
-    'ALL',
-    'Food & Dining',
-    'Subscriptions',
-    'Shopping & Personal',
-    'Transportation',
-    'Income',
-    'Housing & Rent',
-  ];
-
-  // Top 4 categories for Rocket Money / Copilot style budget pacing
-  const pacingCategoriesConfig = [
-    { name: 'Food & Dining', targetINR: 4500, targetUSD: 450, icon: '🍔' },
-    { name: 'Shopping & Personal', targetINR: 3500, targetUSD: 350, icon: '🛍️' },
-    { name: 'Subscriptions', targetINR: 1500, targetUSD: 120, icon: '🔄' },
-    { name: 'Transportation', targetINR: 2000, targetUSD: 180, icon: '🚗' },
-  ];
+  const CATEGORY_ICONS = {
+    'Food & Dining': '🍔',
+    'Shopping & Personal': '🛍️',
+    'Subscriptions': '🔄',
+    'Transportation': '🚗',
+    'General & Everyday': '💳',
+    'Entertainment': '🎬',
+    'Housing & Rent': '🏠',
+    'Utilities': '⚡',
+    'Health & Fitness': '🏃',
+    'Investments': '📈',
+    'Financial & Transfers': '💸',
+    'Income': '💰',
+  };
 
   const now = new Date();
-  const dayOfMonth = now.getDate() || 21;
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() || 30;
+  const validDates = (transactions || [])
+    .map((t) => new Date(t.date))
+    .filter((d) => !isNaN(d.getTime()));
 
-  const categoryPacingData = pacingCategoriesConfig.map((catConfig) => {
-    const spent = (transactions || [])
+  let monthsSpan = 1.0;
+  let activeRefDate = now;
+  const hasCurrentMonthTxs = (transactions || []).some((t) => isInCurrentMonthCycle(t.date, now));
+
+  if (!hasCurrentMonthTxs && validDates.length > 0) {
+    const minTime = Math.min(...validDates.map((d) => d.getTime()));
+    const maxTime = Math.max(...validDates.map((d) => d.getTime()));
+    const daysSpan = Math.max(1, Math.round((maxTime - minTime) / (1000 * 60 * 60 * 24)) + 1);
+    monthsSpan = Math.max(1.0, daysSpan / 30.417);
+    activeRefDate = new Date(maxTime);
+  }
+
+  const dayOfMonth = activeRefDate.getDate() || 21;
+  const daysInMonth = new Date(activeRefDate.getFullYear(), activeRefDate.getMonth() + 1, 0).getDate() || 30;
+
+  // Aggregate total and monthly average by category across the statement
+  const categoryTotals = {};
+  (transactions || []).forEach((t) => {
+    const norm = normalizeTransaction(t, currency.code);
+    if (norm.is_income || isExcludedFromMonthlySpend(norm)) return;
+    const cat = norm.category || 'General & Everyday';
+    categoryTotals[cat] = (categoryTotals[cat] || 0) + Number(norm.amount || 0);
+  });
+
+  const sortedCatEntries = Object.entries(categoryTotals)
+    .sort((a, b) => b[1] - a[1]);
+
+  const defaultTop = ['Food & Dining', 'Shopping & Personal', 'Subscriptions', 'Transportation'];
+  const topCategories = sortedCatEntries.map(([c]) => c);
+  for (const def of defaultTop) {
+    if (topCategories.length < 4 && !topCategories.includes(def)) {
+      topCategories.push(def);
+    }
+  }
+  const pacingCategoryNames = topCategories.slice(0, 4);
+
+  const categoryPacingData = pacingCategoryNames.map((catName) => {
+    // Check if current cycle has spending
+    let spent = (transactions || [])
       .filter((t) => {
         const norm = normalizeTransaction(t, currency.code);
         if (norm.is_income || isExcludedFromMonthlySpend(norm)) return false;
-        if (!isInCurrentMonthCycle(norm.date, now)) return false;
-        return norm.category === catConfig.name;
+        if (!isInCurrentMonthCycle(norm.date, activeRefDate)) return false;
+        return norm.category === catName;
       })
       .reduce((sum, t) => sum + Number(t.amount || 0), 0);
 
-    const target = currency.code === 'INR' ? catConfig.targetINR : catConfig.targetUSD;
+    // If cycle specific spend is 0, compute monthly average from statement total
+    if (spent === 0 && categoryTotals[catName]) {
+      spent = Math.round(categoryTotals[catName] / monthsSpan);
+    }
+
+    // Dynamic target scaled to spend
+    let target = 0;
+    if (spent > 0) {
+      target = Math.max(currency.code === 'INR' ? 1000 : 100, Math.ceil((spent * 1.25) / 250) * 250);
+    } else {
+      target = currency.code === 'INR' ? 3000 : 300;
+    }
+
     const pctUsed = Math.min(100, Math.round((spent / target) * 100));
     const expectedSpendSoFar = (target / daysInMonth) * dayOfMonth;
 
@@ -93,7 +146,8 @@ export default function RecentActivityLedger() {
     }
 
     return {
-      ...catConfig,
+      name: catName,
+      icon: CATEGORY_ICONS[catName] || '🏷️',
       spent,
       target,
       pctUsed,
@@ -103,6 +157,17 @@ export default function RecentActivityLedger() {
       badgeBorder,
     };
   });
+
+  const categories = Array.from(new Set([
+    'ALL',
+    ...pacingCategoryNames,
+    'Food & Dining',
+    'Shopping & Personal',
+    'Subscriptions',
+    'Transportation',
+    'Income',
+    ...(transactions || []).map((t) => t.category).filter(Boolean),
+  ])).slice(0, 8);
 
   const filteredTransactions = transactions.filter((t) => {
     const matchesSearch =
@@ -173,30 +238,116 @@ export default function RecentActivityLedger() {
           </p>
         </div>
 
-        <button
-          onClick={openSyncModal}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          {hasImportedData && (
+            <button
+              onClick={() => {
+                if (window.confirm('Are you sure you want to delete this uploaded statement and wipe all transactions?')) {
+                  clearImportedData();
+                }
+              }}
+              title="Delete this uploaded statement and reset ledger"
+              style={{
+                background: 'rgba(239, 68, 68, 0.08)',
+                color: '#EF4444',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                borderRadius: '10px',
+                padding: '9px 14px',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <Trash2 size={14} />
+              <span>Delete Statement</span>
+            </button>
+          )}
+
+          <button
+            onClick={openSyncModal}
+            style={{
+              background: 'var(--brand-primary, #0D9488)',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '10px',
+              padding: '9px 16px',
+              fontSize: '0.82rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 2px 4px rgba(13, 148, 136, 0.2)',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <Plus size={15} /> {hasImportedData ? 'Add Real Data / Sync Bank' : 'Connect Bank Account'}
+          </button>
+        </div>
+      </div>
+
+      {/* ACTIVE STATEMENT AUDIT & MANAGEMENT STRIP */}
+      {hasImportedData && (
+        <div
           style={{
-            background: 'var(--brand-primary, #0D9488)',
-            color: '#FFFFFF',
-            border: 'none',
+            background: 'var(--bg-surface-secondary)',
+            border: '1px solid var(--border-subtle)',
             borderRadius: '10px',
-            padding: '9px 16px',
-            fontSize: '0.82rem',
-            fontWeight: 700,
-            cursor: 'pointer',
+            padding: '10px 16px',
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
-            boxShadow: '0 2px 4px rgba(13, 148, 136, 0.2)',
-            transition: 'all 0.15s ease',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '10px',
+            marginBottom: '16px',
           }}
         >
-          <Plus size={15} /> {hasImportedData ? 'Add Real Data / Sync Bank' : 'Connect Bank Account'}
-        </button>
-      </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <FileText size={15} color={isDemoMode ? '#3B82F6' : '#10B981'} />
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+              Statement Source: {activeStatementMeta?.fileName || (isDemoMode ? 'Demo Sandbox ICICI Statement' : 'Active Statement Ingestion')}
+            </span>
+            <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+              &bull; {transactions.length} transactions &bull; Bank: {activeStatementMeta?.institution || 'Linked Bank'}
+            </span>
+          </div>
+
+          <button
+            onClick={() => {
+              if (window.confirm('Delete this uploaded statement and erase all associated transactions from FinSense?')) {
+                clearImportedData();
+              }
+            }}
+            title="Purge uploaded statement"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#EF4444',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              padding: '4px 8px',
+              borderRadius: '6px',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.08)')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+          >
+            <Trash2 size={13} />
+            <span>Delete Statement Data</span>
+          </button>
+        </div>
+      )}
 
       {/* ACCOUNT BALANCES TILES */}
       <div style={{
+
         display: 'grid',
         gridTemplateColumns: !hasImportedData ? 'repeat(auto-fit, minmax(280px, 1fr))' : (Object.keys(accounts || {}).length === 1 ? '1fr' : 'repeat(auto-fit, minmax(240px, 1fr))'),
         gap: '12px',

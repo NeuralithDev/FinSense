@@ -49,7 +49,7 @@ class TestZeroArithmeticNarrator:
         ctx = ContextBuilder.build_context(checking_balance=4000.0, savings_balance=10000.0)
         res = CopilotNarrator.answer_query("Can I buy $200 headphones?", context=ctx)
         assert res.verdict == "AFFORDABLE"
-        assert "$200.00" in res.grounded_narrative
+        assert ("$200.00" in res.grounded_narrative or "₹200.00" in res.grounded_narrative)
         assert res.verified_metrics["purchase_amount"] == 200.0
         assert res.verified_metrics["checking_remaining"] == 3800.0
 

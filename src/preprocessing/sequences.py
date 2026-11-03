@@ -7,6 +7,7 @@ for deep sequence modeling (LSTM / GRU), strictly preventing lookahead data leak
 
 from dataclasses import dataclass
 from typing import List, Tuple, Dict, Any, Optional
+from collections import Counter
 import numpy as np
 import pandas as pd
 import torch
@@ -275,6 +276,14 @@ class DynamicTemporalDensityProfiler:
             if amt <= 0:
                 continue
 
+            # Exclude fixed recurring bills, investments, rent, EMIs, transfers from impulse spending matrix
+            if tx.get('is_recurring', False):
+                continue
+            cat_lower = str(tx.get('category', '')).lower()
+            desc_lower = str(tx.get('merchant', '') or tx.get('raw_description', '')).lower()
+            if any(k in cat_lower or k in desc_lower for k in ['invest', 'sip', 'zerodha', 'groww', 'rent', 'housing', 'emi', 'loan', 'transfer', 'salary']):
+                continue
+
             # Determine day of week (0=Mon, 6=Sun) and hour (0-23)
             day_idx = 0
             hour = 12
@@ -459,6 +468,22 @@ class DynamicTemporalDensityProfiler:
                 }
             ]
 
+        # Ensure cells falling in peak vulnerability windows are explicitly marked with high impulse risk
+        for win in top_windows:
+            w_day = win.get("day") or win.get("day_name")
+            w_start = int(win.get("start_hour", 0))
+            w_end = int(win.get("end_hour", 0))
+            w_tier = win.get("risk_tier", "HIGH")
+            target_intensity = 88 if w_tier == "HIGH" else (72 if w_tier in ["ELEVATED", "MEDIUM"] else 60)
+            if w_day in heatmap_dict:
+                for cell in heatmap_dict[w_day]:
+                    if w_start <= cell["hour"] <= w_end:
+                        cell["intensity"] = max(cell["intensity"], target_intensity)
+                        cell["isPeakRisk"] = True
+                        cell["is_peak_window"] = True
+                        cell["risk_tier"] = w_tier
+                        cell["trigger"] = win.get("empirical_trigger") or f"{win.get('primary_category', 'Impulse')} Spike"
+
         # Generate empirical personalized narrative
         top1 = top_windows[0]
         insights = [
@@ -469,8 +494,10 @@ class DynamicTemporalDensityProfiler:
 
         return {
             "heatmap": heatmap_dict,
+            "matrix_by_day": heatmap_dict,
             "peak_vulnerability_windows": top_windows,
             "empirical_insights": insights,
+            "personalized_narrative": " ".join(insights),
             "total_transactions_profiled": len(records)
         }
 

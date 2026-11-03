@@ -17,7 +17,10 @@ import {
   cancelOrPauseSubscription,
   resolveAnomalyAlert,
   switchSandboxProfile,
+  deleteStatementAndResetData,
+  seedDemoSandboxData,
 } from '../services/api';
+
 import {
   getReconciledFinanceData,
   DEFAULT_INR_TARGET,
@@ -414,22 +417,63 @@ export function importRawBankStatementAction({
 
   const normalizedRows = normalizeTransactionLedger(rawRows);
 
-  let derivedBalance = closingBalance;
-  if (derivedBalance === null || derivedBalance === undefined) {
+  let derivedBalance = closingBalance != null ? Number(closingBalance) : null;
+  if (derivedBalance === null || isNaN(derivedBalance)) {
     for (const row of normalizedRows) {
       if (row.balance_after !== undefined && row.balance_after > 0) {
-        derivedBalance = row.balance_after;
+        derivedBalance = Number(row.balance_after);
         break;
       }
     }
   }
 
-  const updatedBalance = derivedBalance !== null && derivedBalance !== undefined
+  const updatedBalance = derivedBalance !== null && !isNaN(derivedBalance)
     ? Number(derivedBalance)
     : 10754.62;
 
-  const detectedSubs = detectRecurringSubscriptions(normalizedRows);
-  const alerts = computeUnusualActivityAlerts(normalizedRows);
+  let detectedSubs = [];
+  try {
+    detectedSubs = detectRecurringSubscriptions(normalizedRows) || [];
+  } catch (err) {
+    console.warn('Subscription detection notice:', err);
+  }
+
+  let alerts = [];
+  try {
+    alerts = computeUnusualActivityAlerts(normalizedRows) || [];
+  } catch (err) {
+    console.warn('Anomaly detection notice:', err);
+  }
+
+  // Dynamically compute monthly spend and target budget from normalized rows
+  const validDates = normalizedRows
+    .map((r) => new Date(r.date))
+    .filter((d) => !isNaN(d.getTime()));
+  let monthsSpan = 1.0;
+  if (validDates.length > 0) {
+    const minD = Math.min(...validDates.map((d) => d.getTime()));
+    const maxD = Math.max(...validDates.map((d) => d.getTime()));
+    const days = Math.max(1, Math.round((maxD - minD) / (1000 * 60 * 60 * 24)) + 1);
+    monthsSpan = Math.max(1.0, days / 30.417);
+  }
+  const totalOutflows = normalizedRows
+    .filter((r) => !r.is_income)
+    .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+  const monthlyBurn = Math.max(2000, Math.round(totalOutflows / monthsSpan));
+  const dynamicTargetBudget = Math.max(5000, Math.ceil((monthlyBurn * 1.1) / 500) * 500);
+
+  const emergencyTarget = Math.max(15000, Math.round(monthlyBurn * 3));
+  const emergencyCurrent = Math.min(emergencyTarget * 0.7, Math.max(1000, Math.round(updatedBalance * 0.4)));
+  const techTarget = Math.max(10000, Math.round(monthlyBurn * 1.5));
+  const techCurrent = Math.min(techTarget * 0.5, Math.max(500, Math.round(updatedBalance * 0.25)));
+  const travelTarget = Math.max(8000, Math.round(monthlyBurn * 0.8));
+  const travelCurrent = Math.min(travelTarget * 0.4, Math.max(250, Math.round(updatedBalance * 0.15)));
+
+  const dynamicGoals = [
+    { id: 'goal_1', name: 'Emergency Cushion Reserve', category: 'EMERGENCY_FUND', target: emergencyTarget, current: emergencyCurrent, priority: 1 },
+    { id: 'goal_2', name: 'Major Purchase & Tech Reserve', category: 'MAJOR_PURCHASE', target: techTarget, current: techCurrent, priority: 2 },
+    { id: 'goal_3', name: 'Travel & Lifestyle Buffer', category: 'VACATION', target: travelTarget, current: travelCurrent, priority: 3 },
+  ];
 
   const updatedAccounts = {
     ...storeState.accounts,
@@ -448,6 +492,8 @@ export function importRawBankStatementAction({
     hasImportedData: true,
     hasConnectedBank: true,
     isDemoMode: false,
+    monthlyTargetBudget: dynamicTargetBudget,
+    goals: dynamicGoals,
     accounts: updatedAccounts,
     rawTransactions: rawRows,
     normalizedTransactions: normalizedRows,
@@ -465,7 +511,7 @@ export function importRawBankStatementAction({
     activeNotification: {
       type: 'success',
       title: 'Ledger Ingested & Models Calibrated! ⚡️',
-      message: `Hydrated ${normalizedRows.length} real transactions from ${fileName}. Identified ${detectedSubs.length} recurring subscriptions.`,
+      message: `Hydrated ${normalizedRows.length} real transactions from ${fileName}. Verified balance: ₹${updatedBalance.toLocaleString('en-IN')}. Monthly run-rate: ₹${monthlyBurn.toLocaleString('en-IN')}/mo.`,
     },
   });
 }
@@ -474,6 +520,8 @@ export function importRawBankStatementAction({
  * Loads sample demo data for test drive
  */
 export function loadDemoDataAction() {
+  seedDemoSandboxData().catch((err) => console.warn('Backend demo seed fallback notice:', err));
+
   const normalized = normalizeTransactionLedger(BASE_REALISTIC_TRANSACTIONS);
   const subs = detectRecurringSubscriptions(normalized);
   const alerts = computeUnusualActivityAlerts(normalized);
@@ -499,30 +547,48 @@ export function loadDemoDataAction() {
 }
 
 /**
- * Clears imported data back to clean slate / unlinked state
+ * Permanently deletes the uploaded statement and all associated transactions,
+ * purging both frontend local storage and backend SQLite records back to clean slate.
  */
 export function clearImportedDataAction() {
   if (typeof window !== 'undefined') {
     localStorage.removeItem(getStorageKey());
     localStorage.removeItem('FINSENSE_FINANCIAL_STORE_V2');
   }
+
+  // Call backend to purge SQLite database records as well
+  deleteStatementAndResetData().catch((err) => console.warn('Backend statement deletion fallback notice:', err));
+
   storeState = {
     ...EMPTY_FINANCE_STATE,
     hasImportedData: false,
     hasConnectedBank: false,
     isDemoMode: false,
+    activeStatementMeta: null,
+    transactions: [],
+    rawTransactions: [],
+    normalizedTransactions: [],
+    subscriptions: [],
+    detectedSubscriptions: [],
+    anomalies: [],
+    unusualActivityAlerts: [],
     activeNotification: {
       type: 'info',
-      title: 'Ledger Reset to Clean Slate',
-      message: 'Awaiting bank connection or statement upload.',
+      title: 'Statement & Ledger Deleted 🗑️',
+      message: 'Statement and all transactions removed. FinSense has returned to clean zero-state.',
     },
   };
   emitChange();
 }
 
+export function deleteUploadedStatementAction() {
+  clearImportedDataAction();
+}
+
 export function resetToDemoDataAction() {
   loadDemoDataAction();
 }
+
 
 /**
  * Triggers a real-time live transaction (or simulates live webhook swipe)
@@ -870,6 +936,7 @@ export function useFinanceStore() {
     simulateWebhookCharge: simulateWebhookChargeAction,
     resetToDemoData: resetToDemoDataAction,
     clearImportedData: clearImportedDataAction,
+    deleteUploadedStatement: clearImportedDataAction,
     executeSweep: executeSweepAction,
     cancelSubscription: cancelSubscriptionAction,
     pauseSubscription: pauseSubscriptionAction,

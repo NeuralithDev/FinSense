@@ -39,7 +39,7 @@ def get_health_score(
         feat = pipeline.cached_results.get("user_features", {})
 
         default_exp = float(feat.get("monthly_spending", 15000.0 if curr == "INR" else 1767.47))
-        default_inc = 25000.0 if curr == "INR" else 2500.0
+        default_inc = float(feat.get("monthly_income", 25000.0 if curr == "INR" else 2500.0))
 
         income = monthly_income if monthly_income is not None else default_inc
         expenses = monthly_expenses if monthly_expenses is not None else default_exp
@@ -179,7 +179,11 @@ def get_health_score(
             "net_cash_flow": round(income - expenses, 2),
             "pillars": pillars,
             "peer_cohort_percentiles": cohort_percentiles,
-            "cohort_name": "Urban Mid-Career Professionals (₹12L - ₹18L)" if curr == "INR" else "Urban Mid-Career Professionals ($60k - $95k)",
+            "cohort_name": (
+                "Growth Professionals & Business Operators (₹1,00,000 - ₹2,50,000/mo)" if income >= 100000
+                else ("Mid-Career Professionals (₹50,000 - ₹1,00,000/mo)" if income >= 50000
+                else "Young Scholars & Early Professionals (₹20,000 - ₹50,000/mo)")
+            ) if curr == "INR" else "Urban Mid-Career Professionals ($60k - $95k)",
             "threshold_breaches": state.risk_alerts,
             "explanations": state.explanations,
             "actionable_summary": " ".join(state.explanations[:2]) if state.explanations else "Steady cash flow and optimal reserves."

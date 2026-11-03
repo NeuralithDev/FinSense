@@ -280,11 +280,15 @@ export function detectRecurringSubscriptions(
     }
 
     // Billing Day Calculation & Next Expected Date
-    const latestTxDate = new Date(latestTx.date);
+    const rawDateObj = new Date(latestTx.date);
+    const latestTxDate = isNaN(rawDateObj.getTime()) ? new Date(refDateObj) : rawDateObj;
     const billingDay = isNaN(latestTxDate.getDate()) ? 4 : latestTxDate.getDate();
 
     // Project next billing date
     let nextDate = new Date(latestTxDate);
+    if (isNaN(nextDate.getTime())) {
+      nextDate = new Date(refDateObj);
+    }
     if (cadence === 'MONTHLY') {
       nextDate.setMonth(nextDate.getMonth() + 1);
     } else {
@@ -292,7 +296,9 @@ export function detectRecurringSubscriptions(
     }
 
     // If nextDate is still before reference date, push forward to next upcoming cycle
-    while (nextDate.getTime() < refDateObj.getTime()) {
+    let safetyCounter = 0;
+    while (!isNaN(nextDate.getTime()) && nextDate.getTime() < refDateObj.getTime() && safetyCounter < 120) {
+      safetyCounter++;
       if (cadence === 'MONTHLY') {
         nextDate.setMonth(nextDate.getMonth() + 1);
       } else {
@@ -300,12 +306,18 @@ export function detectRecurringSubscriptions(
       }
     }
 
+    if (isNaN(nextDate.getTime())) {
+      nextDate = new Date(refDateObj);
+    }
+
     const nextDateStr = nextDate.toISOString().split('T')[0];
     const daysUntilNext = Math.max(0, Math.round((nextDate.getTime() - refDateObj.getTime()) / (1000 * 60 * 60 * 24)));
 
     // Format display for next expected date e.g. "Nov 4, 2026"
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const nextExpectedDateFormatted = `${monthNames[nextDate.getMonth()]} ${nextDate.getDate()}, ${nextDate.getFullYear()}`;
+    const nextExpectedDateFormatted = isNaN(nextDate.getTime())
+      ? 'Upcoming'
+      : `${monthNames[nextDate.getMonth()] || 'Upcoming'} ${nextDate.getDate()}, ${nextDate.getFullYear()}`;
 
     // Annual burn
     const annualCost = cadence === 'MONTHLY' ? latestAmount * 12 : latestAmount;

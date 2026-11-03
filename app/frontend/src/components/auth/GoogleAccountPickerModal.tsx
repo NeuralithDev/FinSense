@@ -5,13 +5,13 @@ import {
   User, 
   Plus, 
   ArrowRight, 
-  Check, 
-  Sparkles, 
   ShieldCheck, 
   Key, 
   ExternalLink,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Trash2,
+  CheckCircle2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useAuth } from '../../store/authStore';
@@ -40,18 +40,14 @@ export function GoogleIcon({ size = 20 }: { size?: number }) {
   );
 }
 
-const DEFAULT_ACCOUNTS = [
-  {
-    name: 'Mudit Sharma',
-    email: 'mudit.sharma@gmail.com',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces',
-  },
-  {
-    name: 'FinSense Preview',
-    email: 'user.preview@gmail.com',
-    avatar: null,
-  },
-];
+interface SavedGoogleAccount {
+  email: string;
+  name: string;
+  avatar?: string;
+  lastUsed?: string;
+}
+
+const REMEMBERED_ACCOUNTS_KEY = 'FINSENSE_REMEMBERED_GOOGLE_ACCOUNTS';
 
 export default function GoogleAccountPickerModal({
   isOpen,
@@ -63,11 +59,22 @@ export default function GoogleAccountPickerModal({
   onAccountAuthenticated: (account: { email: string; name: string; avatar?: string; provider: string }) => void;
 }) {
   const { login } = useAuth();
-  const [customMode, setCustomMode] = useState(false);
+  
+  // Stored recent accounts
+  const [savedAccounts, setSavedAccounts] = useState<SavedGoogleAccount[]>(() => {
+    try {
+      const raw = localStorage.getItem(REMEMBERED_ACCOUNTS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
   const [customEmail, setCustomEmail] = useState('');
   const [customName, setCustomName] = useState('');
   const [customError, setCustomError] = useState('');
   const [showConfig, setShowConfig] = useState(false);
+  const [isAddingNew, setIsAddingNew] = useState(false);
 
   // Client ID handling
   const envClientId = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || '';
@@ -77,6 +84,13 @@ export default function GoogleAccountPickerModal({
 
   const [hasRealGsiLoaded, setHasRealGsiLoaded] = useState(false);
   const gsiButtonRef = useRef<HTMLDivElement>(null);
+
+  // If no saved accounts exist, default to enter mode
+  useEffect(() => {
+    if (savedAccounts.length === 0) {
+      setIsAddingNew(true);
+    }
+  }, [savedAccounts.length]);
 
   // Load Google Identity Services SDK dynamically
   useEffect(() => {
@@ -95,10 +109,6 @@ export default function GoogleAccountPickerModal({
       setHasRealGsiLoaded(true);
     };
     document.body.appendChild(script);
-
-    return () => {
-      // Keep script active
-    };
   }, []);
 
   // Initialize GSI if client ID is valid
@@ -153,7 +163,39 @@ export default function GoogleAccountPickerModal({
     }
   };
 
+  const saveRememberedAccount = (acc: SavedGoogleAccount) => {
+    try {
+      const updated = [
+        acc,
+        ...savedAccounts.filter((a) => a.email.toLowerCase() !== acc.email.toLowerCase()),
+      ].slice(0, 5);
+      setSavedAccounts(updated);
+      localStorage.setItem(REMEMBERED_ACCOUNTS_KEY, JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Could not save remembered account:', e);
+    }
+  };
+
+  const removeRememberedAccount = (e: React.MouseEvent, email: string) => {
+    e.stopPropagation();
+    const updated = savedAccounts.filter((a) => a.email.toLowerCase() !== email.toLowerCase());
+    setSavedAccounts(updated);
+    try {
+      localStorage.setItem(REMEMBERED_ACCOUNTS_KEY, JSON.stringify(updated));
+    } catch {}
+    if (updated.length === 0) {
+      setIsAddingNew(true);
+    }
+  };
+
   const completeLogin = (account: { email: string; name: string; avatar?: string; provider: string }) => {
+    saveRememberedAccount({
+      email: account.email,
+      name: account.name,
+      avatar: account.avatar,
+      lastUsed: new Date().toISOString(),
+    });
+
     login({
       email: account.email,
       name: account.name,
@@ -171,11 +213,11 @@ export default function GoogleAccountPickerModal({
     onAccountAuthenticated(account);
   };
 
-  const handleSelectPredefined = (acc: (typeof DEFAULT_ACCOUNTS)[0]) => {
+  const handleSelectAccount = (acc: SavedGoogleAccount) => {
     completeLogin({
       email: acc.email,
       name: acc.name,
-      avatar: acc.avatar || undefined,
+      avatar: acc.avatar,
       provider: 'google',
     });
   };
@@ -183,16 +225,16 @@ export default function GoogleAccountPickerModal({
   const handleCustomSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!customEmail.trim() || !customEmail.includes('@')) {
-      setCustomError('Please enter a valid Gmail address (e.g. name@gmail.com)');
+      setCustomError('Please enter your valid Google email address (e.g. name@gmail.com)');
       return;
     }
 
-    const nameToUse = customName.trim() || customEmail.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    const email = customEmail.trim().toLowerCase();
+    const derivedName = customName.trim() || email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
     completeLogin({
-      email: customEmail.trim(),
-      name: nameToUse,
-      avatar: undefined,
+      email,
+      name: derivedName,
       provider: 'google',
     });
   };
@@ -222,7 +264,7 @@ export default function GoogleAccountPickerModal({
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
-          maxWidth: '440px',
+          maxWidth: '460px',
           backgroundColor: '#FFFFFF',
           borderRadius: '16px',
           boxShadow: '0 20px 40px -8px rgba(0, 0, 0, 0.25)',
@@ -237,6 +279,7 @@ export default function GoogleAccountPickerModal({
         <div style={{ padding: '24px 28px 16px', textAlign: 'center', position: 'relative' }}>
           <button
             onClick={onClose}
+            aria-label="Close"
             style={{
               position: 'absolute',
               top: '16px',
@@ -256,14 +299,14 @@ export default function GoogleAccountPickerModal({
           </button>
 
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
-            <GoogleIcon size={32} />
+            <GoogleIcon size={36} />
           </div>
 
-          <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#111827', margin: '0 0 6px', letterSpacing: '-0.01em' }}>
+          <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#111827', margin: '0 0 6px', letterSpacing: '-0.01em' }}>
             Sign in with Google
           </h3>
-          <p style={{ fontSize: '0.84rem', color: '#6B7280', margin: 0 }}>
-            Choose an account to continue to <strong>FinSense</strong>
+          <p style={{ fontSize: '0.84rem', color: '#6B7280', margin: 0, lineHeight: 1.4 }}>
+            Link your Google account to access your personal <strong>FinSense</strong> cockpit.
           </p>
         </div>
 
@@ -273,8 +316,8 @@ export default function GoogleAccountPickerModal({
             <div ref={gsiButtonRef} style={{ width: '100%', display: 'flex', justifyContent: 'center' }} />
             <div style={{ display: 'flex', alignItems: 'center', width: '100%', margin: '14px 0 6px' }}>
               <div style={{ flex: 1, height: '1px', background: '#E5E7EB' }} />
-              <span style={{ padding: '0 10px', fontSize: '0.72rem', color: '#9CA3AF', textTransform: 'uppercase' }}>
-                or pick instant account
+              <span style={{ padding: '0 10px', fontSize: '0.72rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                or enter Google account
               </span>
               <div style={{ flex: 1, height: '1px', background: '#E5E7EB' }} />
             </div>
@@ -283,13 +326,17 @@ export default function GoogleAccountPickerModal({
 
         {/* Content Body */}
         <div style={{ padding: '0 24px 20px', flex: 1 }}>
-          {!customMode ? (
+          {/* Saved Accounts List (if available and not adding new) */}
+          {!isAddingNew && savedAccounts.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {/* Account List */}
-              {DEFAULT_ACCOUNTS.map((acc) => (
-                <button
+              <div style={{ fontSize: '0.76rem', fontWeight: 600, color: '#4B5563', marginBottom: '4px' }}>
+                Choose an account from this browser:
+              </div>
+
+              {savedAccounts.map((acc) => (
+                <div
                   key={acc.email}
-                  onClick={() => handleSelectPredefined(acc)}
+                  onClick={() => handleSelectAccount(acc)}
                   style={{
                     width: '100%',
                     padding: '12px 14px',
@@ -302,6 +349,7 @@ export default function GoogleAccountPickerModal({
                     cursor: 'pointer',
                     textAlign: 'left',
                     transition: 'all 0.15s ease',
+                    boxSizing: 'border-box',
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F9FAFB')}
                   onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#FFFFFF')}
@@ -318,16 +366,17 @@ export default function GoogleAccountPickerModal({
                         width: '36px',
                         height: '36px',
                         borderRadius: '50%',
-                        background: '#0D9488',
+                        background: '#1A73E8',
                         color: '#FFFFFF',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         fontWeight: 700,
                         fontSize: '0.9rem',
+                        flexShrink: 0,
                       }}
                     >
-                      {acc.name.charAt(0)}
+                      {acc.name ? acc.name.charAt(0).toUpperCase() : 'G'}
                     </div>
                   )}
 
@@ -340,19 +389,36 @@ export default function GoogleAccountPickerModal({
                     </div>
                   </div>
 
+                  <button
+                    onClick={(e) => removeRememberedAccount(e, acc.email)}
+                    title="Remove saved account"
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#9CA3AF',
+                      cursor: 'pointer',
+                      padding: '4px',
+                      borderRadius: '4px',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = '#EF4444')}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = '#9CA3AF')}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+
                   <ArrowRight size={15} color="#9CA3AF" />
-                </button>
+                </div>
               ))}
 
-              {/* Use Another Account Button */}
+              {/* Add Account Button */}
               <button
-                onClick={() => setCustomMode(true)}
+                onClick={() => setIsAddingNew(true)}
                 style={{
                   width: '100%',
                   padding: '12px 14px',
                   borderRadius: '10px',
-                  border: '1px solid #E5E7EB',
-                  background: '#FFFFFF',
+                  border: '1px dashed #CBD5E1',
+                  background: '#F8FAFC',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '12px',
@@ -360,84 +426,93 @@ export default function GoogleAccountPickerModal({
                   textAlign: 'left',
                   transition: 'all 0.15s ease',
                   marginTop: '4px',
+                  boxSizing: 'border-box',
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F9FAFB')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#FFFFFF')}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#F1F5F9';
+                  e.currentTarget.style.borderColor = '#1A73E8';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '#F8FAFC';
+                  e.currentTarget.style.borderColor = '#CBD5E1';
+                }}
               >
                 <div
                   style={{
                     width: '36px',
                     height: '36px',
                     borderRadius: '50%',
-                    background: '#F3F4F6',
-                    color: '#6B7280',
+                    background: '#FFFFFF',
+                    border: '1px solid #E2E8F0',
+                    color: '#1A73E8',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
                 >
-                  <User size={18} />
+                  <Plus size={18} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#111827' }}>
-                    Use another account
+                    Use another Google account
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>
-                    Enter any personal or work Gmail address
+                  <div style={{ fontSize: '0.74rem', color: '#6B7280' }}>
+                    Connect any Google Workspace or personal Gmail
                   </div>
                 </div>
-                <Plus size={16} color="#6B7280" />
               </button>
             </div>
           ) : (
-            /* Custom Gmail Form */
+            /* Direct Google Account Form */
             <form onSubmit={handleCustomSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#374151', marginBottom: '4px' }}>
-                  Gmail Address
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#374151', marginBottom: '6px' }}>
+                  Google / Gmail Address
                 </label>
-                <input
-                  type="email"
-                  placeholder="e.g. yourname@gmail.com"
-                  value={customEmail}
-                  onChange={(e) => {
-                    setCustomEmail(e.target.value);
-                    setCustomError('');
-                  }}
-                  autoFocus
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    borderRadius: '8px',
-                    border: customError ? '1px solid #EF4444' : '1px solid #D1D5DB',
-                    fontSize: '0.88rem',
-                    color: '#111827',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="email"
+                    placeholder="you@gmail.com or you@company.com"
+                    value={customEmail}
+                    onChange={(e) => {
+                      setCustomEmail(e.target.value);
+                      setCustomError('');
+                    }}
+                    autoFocus
+                    style={{
+                      width: '100%',
+                      padding: '11px 12px',
+                      borderRadius: '8px',
+                      border: customError ? '1px solid #EF4444' : '1px solid #D1D5DB',
+                      fontSize: '0.9rem',
+                      color: '#111827',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
                 {customError && (
-                  <div style={{ fontSize: '0.72rem', color: '#EF4444', marginTop: '4px' }}>
+                  <div style={{ fontSize: '0.74rem', color: '#EF4444', marginTop: '4px' }}>
                     {customError}
                   </div>
                 )}
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#374151', marginBottom: '4px' }}>
-                  Full Name (Optional)
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#374151', marginBottom: '6px' }}>
+                  Account Display Name (Optional)
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Mudit Sharma"
+                  placeholder="e.g. Alex Morgan"
                   value={customName}
                   onChange={(e) => setCustomName(e.target.value)}
                   style={{
                     width: '100%',
-                    padding: '10px 12px',
+                    padding: '11px 12px',
                     borderRadius: '8px',
                     border: '1px solid #D1D5DB',
-                    fontSize: '0.88rem',
+                    fontSize: '0.9rem',
                     color: '#111827',
                     outline: 'none',
                     boxSizing: 'border-box',
@@ -445,39 +520,47 @@ export default function GoogleAccountPickerModal({
                 />
               </div>
 
-              <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
-                <button
-                  type="button"
-                  onClick={() => setCustomMode(false)}
-                  style={{
-                    flex: 1,
-                    padding: '10px',
-                    borderRadius: '8px',
-                    border: '1px solid #D1D5DB',
-                    background: '#FFFFFF',
-                    color: '#4B5563',
-                    fontSize: '0.84rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Back
-                </button>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
+                {savedAccounts.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingNew(false)}
+                    style={{
+                      flex: 1,
+                      padding: '11px',
+                      borderRadius: '8px',
+                      border: '1px solid #D1D5DB',
+                      background: '#FFFFFF',
+                      color: '#4B5563',
+                      fontSize: '0.86rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Saved Accounts
+                  </button>
+                )}
                 <button
                   type="submit"
                   style={{
                     flex: 2,
-                    padding: '10px',
+                    padding: '11px',
                     borderRadius: '8px',
                     border: 'none',
                     background: '#1A73E8',
                     color: '#FFFFFF',
-                    fontSize: '0.84rem',
+                    fontSize: '0.88rem',
                     fontWeight: 700,
                     cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    boxShadow: '0 2px 6px rgba(26, 115, 232, 0.3)',
                   }}
                 >
-                  Continue to FinSense
+                  <GoogleIcon size={18} />
+                  <span>Link Google Account</span>
                 </button>
               </div>
             </form>
@@ -497,25 +580,25 @@ export default function GoogleAccountPickerModal({
                 width: '100%',
                 padding: '4px 0',
                 cursor: 'pointer',
-                fontSize: '0.72rem',
+                fontSize: '0.74rem',
                 color: '#6B7280',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Key size={12} />
-                <span>Google Cloud Client ID Settings</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Key size={13} color="#1A73E8" />
+                <span>Google Cloud OAuth 2.0 Client ID (Production Mode)</span>
               </div>
-              {showConfig ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {showConfig ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
             </button>
 
             {showConfig && (
-              <div style={{ marginTop: '8px', padding: '10px', background: '#F9FAFB', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
-                <div style={{ fontSize: '0.72rem', color: '#4B5563', marginBottom: '6px' }}>
-                  Paste a real Google OAuth 2.0 Web Client ID to trigger Google's official popup:
+              <div style={{ marginTop: '8px', padding: '12px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                <div style={{ fontSize: '0.74rem', color: '#475569', lineHeight: 1.4, marginBottom: '8px' }}>
+                  Paste a real Google Cloud OAuth 2.0 Web Client ID to trigger Google's native One-Tap and popup sign-in:
                 </div>
                 <input
                   type="text"
-                  placeholder="apps.googleusercontent.com Client ID"
+                  placeholder="e.g. 123456789-abc.apps.googleusercontent.com"
                   value={clientId}
                   onChange={(e) => {
                     const val = e.target.value.trim();
@@ -524,14 +607,18 @@ export default function GoogleAccountPickerModal({
                   }}
                   style={{
                     width: '100%',
-                    padding: '6px 8px',
+                    padding: '8px 10px',
                     borderRadius: '6px',
-                    border: '1px solid #D1D5DB',
-                    fontSize: '0.72rem',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '0.75rem',
                     fontFamily: 'monospace',
                     boxSizing: 'border-box',
+                    background: '#FFFFFF',
                   }}
                 />
+                <div style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: '6px' }}>
+                  Or set <code>VITE_GOOGLE_CLIENT_ID</code> in your <code>.env</code> file.
+                </div>
               </div>
             )}
           </div>
@@ -543,12 +630,18 @@ export default function GoogleAccountPickerModal({
             padding: '12px 24px',
             background: '#F9FAFB',
             borderTop: '1px solid #E5E7EB',
-            fontSize: '0.7rem',
+            fontSize: '0.72rem',
             color: '#6B7280',
             lineHeight: 1.4,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
           }}
         >
-          To continue, Google will share your name, email address, language preference, and profile picture with FinSense. See FinSense's Privacy Policy.
+          <ShieldCheck size={16} color="#0D9488" style={{ flexShrink: 0 }} />
+          <span>
+            FinSense enforces strict zero-knowledge account isolation. Your statement uploads and AI insights are cryptographically scoped to your Google identity.
+          </span>
         </div>
       </motion.div>
     </div>

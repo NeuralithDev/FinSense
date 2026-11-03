@@ -42,77 +42,27 @@ class UserDataPipeline:
     _instance: Optional["UserDataPipeline"] = None
 
     def __init__(self):
-        # Default Accounts Baseline (Configured for Indian Rupee and verified bank profiles)
+        # Default Clean Slate Accounts Baseline (Unlinked zero-state)
         self.accounts = {
             "checking": {
-                "id": "acc_chk_01",
-                "name": "ICICI Bank Savings (Account ••2708 - Mudit Sharma)",
+                "id": "acc_chk_empty",
+                "name": "No Checking Account Linked",
                 "type": "CHECKING",
-                "balance": 10754.62,
+                "balance": 0.0,
                 "currency": "INR",
-                "institution": "ICICI Bank",
-                "mask": "2708",
-                "holder": "Mudit Sharma",
-                "status": "CONNECTED"
+                "institution": "No Bank Linked",
+                "mask": "----",
+                "holder": "",
+                "status": "DISCONNECTED"
             }
         }
 
-        # Priority Savings Goals (Calibrated for Student Scholar Profile)
-        self.goals = [
-            {
-                "id": "goal_1",
-                "name": "Semester Safety Buffer",
-                "category": "EMERGENCY_FUND",
-                "target": 15000.0,
-                "current": 8500.0,
-                "priority": 1
-            },
-            {
-                "id": "goal_2",
-                "name": "Tech & Laptop Reserve",
-                "category": "MAJOR_PURCHASE",
-                "target": 20000.0,
-                "current": 6000.0,
-                "priority": 2
-            },
-            {
-                "id": "goal_3",
-                "name": "Semester Break Travel Fund",
-                "category": "VACATION",
-                "target": 10000.0,
-                "current": 4000.0,
-                "priority": 3
-            }
-        ]
-
-        # Active Anomaly Tracking
-        self.anomalies = [
-            {
-                "id": "anom_1",
-                "merchant": "Zerodha Broking",
-                "date": "2026-10-17",
-                "category": "Investments",
-                "amount": 5500.0,
-                "severity": "CRITICAL",
-                "status": "PENDING",
-                "root_cause": "Large single debit (₹5,500.00), significantly higher than typical daily spend"
-            },
-            {
-                "id": "anom_2",
-                "merchant": "Domino's Pizza",
-                "date": "2026-10-12",
-                "category": "Food & Dining",
-                "amount": 838.95,
-                "severity": "MODERATE",
-                "status": "PENDING",
-                "root_cause": "High food & dining ticket (₹838.95)"
-            }
-        ]
-
-        # Subscription States
+        self.goals = []
+        self.anomalies = []
         self.cancelled_subscriptions: set = set()
         self.paused_subscriptions: set = set()
         self.raw_transactions = []
+        self.active_statement_meta = None
 
         # Peer Population Baseline (Reference Cohort)
         self._init_peer_cohort_baseline()
@@ -121,7 +71,6 @@ class UserDataPipeline:
         self.db = FinSenseDB.get_instance()
         persisted_accs = self.db.get_accounts("0")
         persisted_txs = self.db.get_transactions("0")
-        loaded_real = False
 
         if persisted_accs and persisted_txs:
             self.accounts = {}
@@ -139,29 +88,16 @@ class UserDataPipeline:
                     "status": "CONNECTED"
                 }
             self.raw_transactions = persisted_txs
-            loaded_real = True
-
-        if not loaded_real:
-            # Ingest User's Real Statement if available, otherwise seed fallback
-            sample_csv = Path("./data/sample_data_testing.csv")
-            if not sample_csv.exists():
-                sample_csv = Path("/Users/ms/Desktop/sample_data_testing.csv")
-
-            if sample_csv.exists():
-                try:
-                    content = sample_csv.read_text(encoding="utf-8", errors="ignore")
-                    acc_info, txs, bal = self.parse_bank_statement_csv(content)
-                    if txs:
-                        self.apply_parsed_statement(acc_info, txs, bal)
-                        loaded_real = True
-                except Exception as e:
-                    print(f"Warning: Failed to load initial real statement: {e}")
-
-            if not loaded_real:
-                self._init_seed_transactions()
+            self.active_statement_meta = {
+                "fileName": "Ingested_Statement.csv",
+                "institution": persisted_accs[0].get("institution", "Connected Bank"),
+                "rowsCount": len(persisted_txs),
+                "importedAt": datetime.utcnow().isoformat()
+            }
 
         # Run First Pipeline Pass
         self.recompute_all()
+
 
     @classmethod
     def get_instance(cls) -> "UserDataPipeline":
@@ -242,11 +178,11 @@ class UserDataPipeline:
 
         # 1. Metadata detection (only inspect preamble lines before table header)
         account_info = {
-            "account_name": "ICICI Bank Savings (Account ••2708 - Mudit Sharma)",
-            "account_mask": "2708",
+            "account_name": "Bank Statement Account",
+            "account_mask": "••••",
             "currency": "INR",
-            "bank_name": "ICICI Bank",
-            "holder_name": "Mudit Sharma"
+            "bank_name": "Connected Bank",
+            "holder_name": "Account Holder"
         }
 
         # 2. Table Header Row Detection
@@ -266,25 +202,38 @@ class UserDataPipeline:
         preamble_lines = lines[:header_idx] if header_idx > 0 else lines[:15]
         for l in preamble_lines:
             l_up = l.upper()
-            if "MUDIT SHARMA" in l_up:
-                account_info["holder_name"] = "Mudit Sharma"
-            m = re.search(r"\b(\d{9,16})\b", l)
+            m_holder = re.search(r"\b(?:MR|MS|MRS|DR)\.?\s+([A-Z\s]{3,35})", l_up)
+            if m_holder and not any(k in m_holder.group(1) for k in ["BANK", "STATEMENT", "PAGE", "BRANCH", "LIMIT"]):
+                account_info["holder_name"] = m_holder.group(1).title().strip()
+            elif "NAME" in l_up:
+                m_named = re.search(r"(?:NAME|HOLDER)\s*[:\-]\s*([A-Za-z\s]{3,35})", l, re.IGNORECASE)
+                if m_named and not any(k in m_named.group(1).upper() for k in ["BANK", "STATEMENT", "PAGE", "BRANCH"]):
+                    account_info["holder_name"] = m_named.group(1).title().strip()
+
+            m = re.search(r"\b(\d{9,18})\b", l)
             if m:
                 account_info["account_mask"] = m.group(1)[-4:]
             if "INR" in l_up or "₹" in l or "RUPEE" in l_up:
                 account_info["currency"] = "INR"
             elif "USD" in l_up or "$" in l:
                 account_info["currency"] = "USD"
-            if "ICICI" in l_up:
-                account_info["bank_name"] = "ICICI Bank"
-            elif "HDFC" in l_up:
+
+            if "HDFC" in l_up:
                 account_info["bank_name"] = "HDFC Bank"
-            elif "SBI" in l_up:
+            elif "ICICI" in l_up:
+                account_info["bank_name"] = "ICICI Bank"
+            elif "SBI" in l_up or "STATE BANK" in l_up:
                 account_info["bank_name"] = "State Bank of India"
             elif "AXIS" in l_up:
                 account_info["bank_name"] = "Axis Bank"
             elif "KOTAK" in l_up:
                 account_info["bank_name"] = "Kotak Mahindra Bank"
+            elif "CHASE" in l_up:
+                account_info["bank_name"] = "Chase Bank"
+            elif "WELLS" in l_up:
+                account_info["bank_name"] = "Wells Fargo"
+            elif "BOFA" in l_up or "BANK OF AMERICA" in l_up:
+                account_info["bank_name"] = "Bank of America"
 
         # Check footer for bank name if not found in preamble
         for l in lines[-25:]:
@@ -358,15 +307,23 @@ class UserDataPipeline:
                 amt = abs(gen_amt)
                 is_income = gen_amt > 0
 
-            # Convert Date to ISO YYYY-MM-DD
-            m = re.search(r"(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})", raw_date)
-            if m:
-                d, mo, yr = m.group(1), m.group(2), m.group(3)
-                if len(yr) == 2:
-                    yr = "20" + yr
-                iso_date = f"{yr}-{int(mo):02d}-{int(d):02d}"
+            # Convert Date to ISO YYYY-MM-DD with multi-format detection
+            m_iso = re.search(r"(\d{4})[/-](\d{1,2})[/-](\d{1,2})", raw_date)
+            if m_iso:
+                iso_date = f"{m_iso.group(1)}-{int(m_iso.group(2)):02d}-{int(m_iso.group(3)):02d}"
             else:
-                iso_date = raw_date
+                m_dmy = re.search(r"(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})", raw_date)
+                if m_dmy:
+                    d, mo, yr = m_dmy.group(1), m_dmy.group(2), m_dmy.group(3)
+                    if len(yr) == 2:
+                        yr = "20" + yr if int(yr) < 70 else "19" + yr
+                    iso_date = f"{yr}-{int(mo):02d}-{int(d):02d}"
+                else:
+                    try:
+                        dt = pd.to_datetime(raw_date, dayfirst=True)
+                        iso_date = dt.strftime("%Y-%m-%d")
+                    except Exception:
+                        iso_date = datetime.now().strftime("%Y-%m-%d")
 
             clean_m = TransactionNormalizer.clean_merchant_name(raw_narr)
             cat, _ = TransactionNormalizer.normalize_category(raw_description=clean_m + " " + raw_narr)
@@ -433,11 +390,20 @@ class UserDataPipeline:
 
         account_info = {
             "account_name": "Bank Statement Account",
-            "account_mask": "2708",
+            "account_mask": "0000",
             "currency": "INR",
-            "bank_name": "ICICI Bank",
-            "holder_name": "Mudit Sharma"
+            "bank_name": "Connected Bank",
+            "holder_name": "Account Holder"
         }
+
+        # Check text for holder name dynamically
+        holder_m = re.search(r"(?:name|account\s+holder|customer\s+name|mr\.|mrs\.|ms\.)[:\s\-]+([A-Za-z\s]{3,35})", text, re.I)
+        if holder_m:
+            account_info["holder_name"] = holder_m.group(1).strip().title()
+
+        mask_m = re.search(r"(?:account\s*(?:no|num|number)?[:\s\.\-]*[xX*]*(\d{4}))", text, re.I)
+        if mask_m:
+            account_info["account_mask"] = mask_m.group(1)
 
         text_up = text.upper()
         if "USD" in text_up or "$" in text or "CHASE" in text_up or "WELLS FARGO" in text_up or "BANK OF AMERICA" in text_up:
@@ -453,10 +419,14 @@ class UserDataPipeline:
             account_info["bank_name"] = "State Bank of India"
         elif "AXIS" in text_up:
             account_info["bank_name"] = "Axis Bank"
+        elif "KOTAK" in text_up:
+            account_info["bank_name"] = "Kotak Mahindra Bank"
         elif "CHASE" in text_up:
             account_info["bank_name"] = "Chase Bank"
         elif "WELLS" in text_up:
             account_info["bank_name"] = "Wells Fargo"
+        elif "BOFA" in text_up or "BANK OF AMERICA" in text_up:
+            account_info["bank_name"] = "Bank of America"
 
         # Regex for transaction line: date followed by narrative and amounts
         date_pattern = re.compile(r"^(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2}|\d{1,2}-[A-Za-z]{3}-\d{2,4})")
@@ -513,16 +483,23 @@ class UserDataPipeline:
 
         return account_info, txs, latest_balance
 
-    def apply_parsed_statement(self, account_info: Dict[str, Any], transactions: List[Dict[str, Any]], latest_balance: float):
+    def apply_parsed_statement(
+        self,
+        account_info: Dict[str, Any],
+        transactions: List[Dict[str, Any]],
+        latest_balance: float,
+        file_name: str = "statement.csv",
+        user_id: str = "0"
+    ):
         """
         Applies parsed real bank statement data, removing demo mock data and
         configuring accounts and goals in the statement's native currency.
         """
         curr = account_info.get("currency", "INR")
         symbol = "₹" if curr == "INR" else "$"
-        bank_name = account_info.get("bank_name", "ICICI Bank")
-        mask = account_info.get("account_mask", "2708")
-        holder = account_info.get("holder_name", "Mudit Sharma")
+        bank_name = account_info.get("bank_name", "Connected Bank")
+        mask = account_info.get("account_mask", "0000")
+        holder = account_info.get("holder_name") or "Account Holder"
 
         self.accounts = {
             "checking": {
@@ -538,17 +515,27 @@ class UserDataPipeline:
             }
         }
 
+        self.active_statement_meta = {
+            "fileName": file_name,
+            "institution": bank_name,
+            "rowsCount": len(transactions),
+            "importedAt": datetime.utcnow().isoformat()
+        }
+
+
+        # Dynamically scale goals based on verified balance and run-rate
+        spend_est = max(15000.0 if curr == "INR" else 1500.0, latest_balance * 0.4)
         if curr == "INR":
             self.goals = [
-                {"id": "goal_1", "name": "Semester Safety Buffer", "category": "EMERGENCY_FUND", "target": 15000.0, "current": 8500.0, "priority": 1},
-                {"id": "goal_2", "name": "Tech & Laptop Reserve", "category": "MAJOR_PURCHASE", "target": 20000.0, "current": 6000.0, "priority": 2},
-                {"id": "goal_3", "name": "Semester Break Travel Fund", "category": "VACATION", "target": 10000.0, "current": 4000.0, "priority": 3}
+                {"id": "goal_1", "name": "Emergency Cushion Reserve", "category": "EMERGENCY_FUND", "target": max(15000.0, round(spend_est * 3, -2)), "current": round(min(latest_balance * 0.45, spend_est * 1.5), 2), "priority": 1},
+                {"id": "goal_2", "name": "Major Purchase & Tech Reserve", "category": "MAJOR_PURCHASE", "target": max(10000.0, round(spend_est * 1.5, -2)), "current": round(min(latest_balance * 0.25, spend_est * 0.8), 2), "priority": 2},
+                {"id": "goal_3", "name": "Travel & Lifestyle Buffer", "category": "VACATION", "target": max(8000.0, round(spend_est * 0.8, -2)), "current": round(min(latest_balance * 0.15, spend_est * 0.4), 2), "priority": 3}
             ]
         else:
             self.goals = [
-                {"id": "goal_1", "name": "Emergency Cushion", "category": "EMERGENCY_FUND", "target": 10000.0, "current": 4800.0, "priority": 1},
-                {"id": "goal_2", "name": "Vacation Fund", "category": "VACATION", "target": 3000.0, "current": 1400.0, "priority": 2},
-                {"id": "goal_3", "name": "New Tech Reserve", "category": "MAJOR_PURCHASE", "target": 2000.0, "current": 850.0, "priority": 3}
+                {"id": "goal_1", "name": "Emergency Cushion Reserve", "category": "EMERGENCY_FUND", "target": max(2500.0, round(spend_est * 3, -1)), "current": round(min(latest_balance * 0.45, spend_est * 1.5), 2), "priority": 1},
+                {"id": "goal_2", "name": "Major Purchase Reserve", "category": "MAJOR_PURCHASE", "target": max(1500.0, round(spend_est * 1.5, -1)), "current": round(min(latest_balance * 0.25, spend_est * 0.8), 2), "priority": 2},
+                {"id": "goal_3", "name": "Travel & Lifestyle Buffer", "category": "VACATION", "target": max(1000.0, round(spend_est * 0.8, -1)), "current": round(min(latest_balance * 0.15, spend_est * 0.4), 2), "priority": 3}
             ]
 
         # Real Anomalies from Transactions
@@ -610,13 +597,56 @@ class UserDataPipeline:
         """
         Executes end-to-end data pipeline on real user transactions.
         """
-        if not raw_tx_list:
+        if raw_tx_list is None:
             raw_tx_list = self.raw_transactions
+
+        if not raw_tx_list:
+            curr = self.accounts.get("checking", {}).get("currency", "INR")
+            return {
+                "user_features": {
+                    "total_spending": 0.0,
+                    "monthly_spending": 0.0,
+                    "monthly_income": 0.0,
+                    "spending_volatility": 0.0,
+                    "largest_category_share": 0.0
+                },
+                "health_score": {
+                    "user_id": "0",
+                    "composite_score": 0.0,
+                    "health_tier": "UNLINKED",
+                    "persona": "New Customer",
+                    "runway_months": 0.0,
+                    "monthly_income": 0.0,
+                    "monthly_burn": 0.0,
+                    "net_cash_flow": 0.0,
+                    "pillars": {
+                        "cash_flow_stability": {"score": 0.0, "status": "PENDING_DATA", "weight_pct": 25, "indicators": {}, "threshold_message": "Awaiting bank statement or Plaid link."},
+                        "savings_resilience": {"score": 0.0, "status": "PENDING_DATA", "weight_pct": 25, "indicators": {}, "threshold_message": "Awaiting account connection."},
+                        "anomaly_insulation": {"score": 0.0, "status": "PENDING_DATA", "weight_pct": 25, "indicators": {}, "threshold_message": "Zero transactions ingested."},
+                        "debt_commitments": {"score": 0.0, "status": "PENDING_DATA", "weight_pct": 25, "indicators": {}, "threshold_message": "No active debt accounts."}
+                    },
+                    "peer_cohort_percentiles": {},
+                    "cohort_name": "New Explorer (Clean Slate)",
+                    "threshold_breaches": [],
+                    "explanations": ["No transactions ingested yet. Drop your bank statement (CSV/PDF) or connect Open Banking to unlock predictive models."],
+                    "actionable_summary": "Clean zero-state ready for your financial statement upload."
+                },
+                "safe_sweep": {
+                    "safe_sweep_amount": 0.0,
+                    "is_paused": True,
+                    "pause_reason": "No accounts connected yet"
+                },
+                "active_subscriptions": [],
+                "subscription_burn": 0.0,
+                "multi_account_summary": self.get_multi_account_summary(),
+                "anomalies": []
+            }
 
         # 1. DATA CLEANING & VALIDATION (src/data/data_cleaning.py)
         df_raw = pd.DataFrame(raw_tx_list)
         if "Amount" not in df_raw.columns and "amount" in df_raw.columns:
             df_raw["Amount"] = df_raw["amount"]
+
         if "User" not in df_raw.columns:
             df_raw["User"] = "live_user"
         if "Card" not in df_raw.columns:
@@ -667,17 +697,35 @@ class UserDataPipeline:
 
         # Dynamically compute monthly spending and monthly income from transactions
         curr = self.accounts["checking"].get("currency", "INR")
-        inflows = [t["amount"] for t in raw_tx_list if t.get("is_income", False)]
-        total_inflow = sum(inflows)
-        unique_dates = len(set(t["date"] for t in raw_tx_list)) if raw_tx_list else 30
-        months_span = max(1.0, unique_dates / 30.0)
-        calc_income = round(total_inflow / months_span, 2)
-        default_inc = 25000.0 if curr == "INR" else 2500.0
-        active_income = calc_income if calc_income > 0 else default_inc
+        dates = [pd.to_datetime(t["date"], errors="coerce") for t in raw_tx_list if t.get("date")]
+        valid_dates = [d for d in dates if pd.notnull(d)]
+        if valid_dates:
+            min_d = min(valid_dates)
+            max_d = max(valid_dates)
+            days_span = max(1, (max_d - min_d).days + 1)
+            months_span = max(1.0, round(days_span / 30.417, 2))
+        else:
+            months_span = 1.0
 
-        outflows = [t["amount"] for t in raw_tx_list if not t.get("is_income", False)]
-        calc_spending = round(sum(outflows) / months_span, 2) if outflows else 15000.0
+        inflows = [t["amount"] for t in raw_tx_list if t.get("is_income", False) or t.get("type") in ("income", "credit")]
+        total_inflow = sum(inflows)
+        calc_income = round(total_inflow / months_span, 2) if total_inflow > 0 else 0.0
+
+        outflows = [t["amount"] for t in raw_tx_list if not (t.get("is_income", False) or t.get("type") in ("income", "credit"))]
+        calc_spending = round(sum(outflows) / months_span, 2) if outflows else 0.0
         active_monthly_spending = calc_spending if calc_spending > 0 else (15000.0 if curr == "INR" else 1500.0)
+
+        # If statement has no explicit credits/inflows (e.g. debit/expense statement), estimate income with healthy surplus
+        if calc_income > 0:
+            active_income = calc_income
+        else:
+            active_income = round(active_monthly_spending * 1.25, 2)
+
+        # Store dynamic features on user_feat_dict
+        user_feat_dict["monthly_spending"] = active_monthly_spending
+        user_feat_dict["monthly_income"] = active_income
+        user_feat_dict["total_inflow"] = total_inflow
+        user_feat_dict["typical_daily_spend"] = round(active_monthly_spending / 30.0, 2)
 
         # 3. SCALING & NORMALIZATION (src/preprocessing/scaling.py)
         user_vector_df = pd.DataFrame([{
@@ -714,7 +762,8 @@ class UserDataPipeline:
             for t in raw_tx_list if not t.get("is_income", False)
         ])
         sym = "₹" if self.accounts["checking"].get("currency", "INR") == "INR" else "$"
-        sub_result = detector.analyze_transactions(sub_df, reference_date=datetime.now().strftime("%Y-%m-%d"), currency_symbol=sym)
+        ref_date = max((t["date"] for t in raw_tx_list if t.get("date")), default=datetime.now().strftime("%Y-%m-%d"))
+        sub_result = detector.analyze_transactions(sub_df, reference_date=ref_date, currency_symbol=sym)
 
         active_subs = [s for s in sub_result.active_subscriptions if s.subscription_id not in self.cancelled_subscriptions and s.subscription_id not in self.paused_subscriptions]
 
@@ -741,10 +790,11 @@ class UserDataPipeline:
         bills_monthly = sum(s.amount for s in active_subs)
         bills_7d = bills_monthly / 4.33
         var_spend_7d = active_monthly_spending / 4.33
-        safety_buf = 1500.0 if curr == "INR" else 350.0
+        safety_buf = max(1500.0 if curr == "INR" else 200.0, round(active_monthly_spending * 0.15, 2))
+        chk_bal = float(self.accounts["checking"]["balance"])
 
         safe_sweep, is_paused, pause_reason, margin, proj_bal = AutopilotSavingsEngine.calculate_safe_sweep(
-            checking_balance=float(self.accounts["checking"]["balance"]),
+            checking_balance=chk_bal,
             expected_inflow_7d=active_income / 4.33,
             forecasted_spend_mean_7d=var_spend_7d,
             forecasted_spend_std_7d=var_spend_7d * 0.15,
@@ -752,9 +802,10 @@ class UserDataPipeline:
             safety_buffer=safety_buf,
             max_overdraft_prob=0.01
         )
-        capped_safe_sweep = min(max(250.0 if curr == "INR" else 25.0, safe_sweep), 850.0 if curr == "INR" else 100.0) if not is_paused else 0.0
+        max_possible_sweep = max(0.0, round((chk_bal - safety_buf) * 0.4, 2))
+        scaled_safe_sweep = min(max(0.0, safe_sweep), max_possible_sweep) if not is_paused else 0.0
         sweep_calc = {
-            "safe_sweep_amount": round(capped_safe_sweep, 2),
+            "safe_sweep_amount": round(scaled_safe_sweep, 2),
             "is_paused": is_paused,
             "pause_reason": pause_reason,
             "projected_end_balance": round(proj_bal, 2),
@@ -784,6 +835,77 @@ class UserDataPipeline:
         self.cached_results = self.run_pipeline(self.raw_transactions)
         return self.cached_results
 
+    def reset_to_clean_slate(self, user_id: str = "0") -> Dict[str, Any]:
+        """
+        Permanently purges all user transactions, accounts, sweeps, and anomaly resolutions.
+        Restores FinSense to a pristine, disconnected zero-state awaiting customer data.
+        """
+        self.db.clear_user_data(user_id)
+        self.raw_transactions = []
+        self.accounts = {
+            "checking": {
+                "id": "acc_chk_empty",
+                "name": "No Checking Account Linked",
+                "type": "CHECKING",
+                "balance": 0.0,
+                "currency": "INR",
+                "institution": "No Bank Linked",
+                "mask": "----",
+                "holder": "",
+                "status": "DISCONNECTED"
+            }
+        }
+        self.goals = []
+        self.anomalies = []
+        self.cancelled_subscriptions = set()
+        self.paused_subscriptions = set()
+        self.active_statement_meta = None
+        self.cached_results = self.run_pipeline([])
+        return {
+            "status": "success",
+            "message": "User statement and data successfully purged. Clean zero-state restored.",
+            "accounts": self.accounts,
+            "total_transactions": 0,
+            "pipeline_summary": self.cached_results
+        }
+
+    def seed_demo_sandbox(self, user_id: str = "0") -> Dict[str, Any]:
+        """
+        Explicitly seeds the student demo sandbox portfolio ONLY when the user requests it.
+        """
+        sample_csv = Path("./data/sample_data_testing.csv")
+        if not sample_csv.exists():
+            sample_csv = Path("/Users/ms/Desktop/sample_data_testing.csv")
+
+        if sample_csv.exists():
+            content = sample_csv.read_text(encoding="utf-8", errors="ignore")
+            acc_info, txs, bal = self.parse_bank_statement_csv(content)
+            if txs:
+                self.apply_parsed_statement(acc_info, txs, bal, file_name="Demo_Student_Portfolio.csv", user_id=user_id)
+                self.active_statement_meta = {
+                    "fileName": "Demo_Student_Portfolio.csv",
+                    "institution": acc_info.get("bank_name", "ICICI Bank"),
+                    "rowsCount": len(txs),
+                    "importedAt": datetime.utcnow().isoformat()
+                }
+                return {
+                    "status": "success",
+                    "message": "Loaded demo student sandbox portfolio.",
+                    "total_transactions": len(txs),
+                    "accounts": self.accounts,
+                    "pipeline_summary": self.recompute_all()
+                }
+
+        self._init_seed_transactions()
+        return {
+            "status": "success",
+            "message": "Loaded fallback seed transactions.",
+            "total_transactions": len(self.raw_transactions),
+            "accounts": self.accounts,
+            "pipeline_summary": self.recompute_all()
+        }
+
+
     # =========================================================================
     # USER ACTIONS & LIVE INGESTION
     # =========================================================================
@@ -793,7 +915,8 @@ class UserDataPipeline:
         content_str: Any,
         file_type: str = "csv",
         password: Optional[str] = None,
-        account_type: str = "checking"
+        account_type: str = "checking",
+        file_name: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Parses raw bank statement CSV or PDF with optional password decryption,
@@ -822,10 +945,12 @@ class UserDataPipeline:
             csv_text = content_str if isinstance(content_str, str) else content_str.decode("utf-8", errors="ignore")
             acc_info, new_records, bal = self.parse_bank_statement_csv(csv_text)
 
+        resolved_name = file_name or f"Statement_{datetime.utcnow().strftime('%Y%m%d')}.{file_type}"
         if new_records:
-            self.apply_parsed_statement(acc_info, new_records, bal)
+            self.apply_parsed_statement(acc_info, new_records, bal, file_name=resolved_name)
 
         return self.recompute_all()
+
 
     def add_or_update_account(
         self,

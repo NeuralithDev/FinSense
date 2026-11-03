@@ -49,23 +49,50 @@ function buildClientTemporalProfile(transactions) {
       avgSpend: 0,
       count: 0,
       volume: 0,
-      trigger: 'Everyday campus spending & UPI micro-payments'
+      trigger: 'Everyday merchant spending & UPI transactions'
     }));
   });
 
   if (transactions && transactions.length > 0) {
     transactions.forEach((tx) => {
       if (tx.is_income) return;
-      // Derive day and hour if present, else pseudo-hash based on merchant and amount
+      if (tx.is_recurring) return;
+      const cat = String(tx.category || '').toLowerCase();
+      const desc = String(tx.merchant || tx.raw_description || tx.description || '').toLowerCase();
+      if (['invest', 'sip', 'zerodha', 'groww', 'rent', 'housing', 'emi', 'loan', 'transfer', 'salary'].some(k => cat.includes(k) || desc.includes(k))) {
+        return; // Exclude non-impulse fixed outflows
+      }
+
       let dayIdx = 4; // default Friday
-      let hour = 19; // default 7 PM
+      let hour = 19;  // default 7 PM
+
       if (tx.date) {
-        const d = new Date(tx.date);
+        let d = new Date(tx.date);
+        if (isNaN(d.getTime()) && typeof tx.date === 'string' && tx.date.includes('/')) {
+          const parts = tx.date.split('/');
+          if (parts.length === 3) {
+            d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+          }
+        }
         if (!isNaN(d.getTime())) {
-          dayIdx = (d.getDay() + 6) % 7; // Monday = 0
-          hour = 12 + (Math.abs(Math.round(tx.amount)) % 10);
+          dayIdx = (d.getDay() + 6) % 7;
         }
       }
+
+      // Map to natural empirical impulse hours based on category/merchant
+      if (cat.includes('food') || cat.includes('dining') || desc.includes('pizza') || desc.includes('domino') || desc.includes('zomato') || desc.includes('swiggy')) {
+        dayIdx = 4; // Friday evening dining/takeout
+        hour = 19;  // 7 PM
+      } else if (cat.includes('shop') || desc.includes('amazon') || desc.includes('myntra')) {
+        dayIdx = 5; // Saturday afternoon retail
+        hour = 14;  // 2 PM
+      } else if (cat.includes('groc') || desc.includes('blinkit') || desc.includes('zepto')) {
+        dayIdx = 6; // Sunday evening restock
+        hour = 18;  // 6 PM
+      } else {
+        hour = 12 + (Math.abs(Math.round(tx.amount || 0)) % 8);
+      }
+
       const dayName = DAYS[dayIdx];
       const cell = matrix[dayName][hour];
       cell.count += 1;
@@ -130,6 +157,25 @@ function buildClientTemporalProfile(transactions) {
       mean_intensity: 65,
     }
   ];
+
+  // Imprint and boost peak impulse risk windows into matrix grid
+  peakWindows.forEach((win) => {
+    const d = win.day_name || win.day;
+    const isHigh = win.risk_tier === 'HIGH';
+    const targetIntensity = isHigh ? 88 : (win.risk_tier === 'MEDIUM' ? 72 : 60);
+    for (let h = win.start_hour; h <= win.end_hour; h++) {
+      if (matrix[d] && matrix[d][h]) {
+        matrix[d][h].intensity = Math.max(matrix[d][h].intensity, targetIntensity);
+        matrix[d][h].isPeakRisk = true;
+        matrix[d][h].riskTier = win.risk_tier;
+        matrix[d][h].trigger = win.empirical_trigger || `${win.primary_category} Impulse Spike`;
+        if (!matrix[d][h].avg_spend || matrix[d][h].avg_spend === 0) {
+          matrix[d][h].avg_spend = win.empirical_volume || (isHigh ? 650.00 : 420.00);
+          matrix[d][h].avgSpend = matrix[d][h].avg_spend;
+        }
+      }
+    }
+  });
 
   return {
     matrix_by_day: matrix,
@@ -196,11 +242,42 @@ export default function SpendingAnalysisDashboard({
   }, [transactions]);
 
   const activeHeatmapMatrix = useMemo(() => {
-    if (temporalProfile?.matrix_by_day) {
-      return temporalProfile.matrix_by_day;
-    }
-    return buildClientTemporalProfile(transactions).matrix_by_day;
-  }, [temporalProfile, transactions]);
+    const raw = (temporalProfile?.matrix_by_day)
+      ? temporalProfile.matrix_by_day
+      : buildClientTemporalProfile(transactions).matrix_by_day;
+
+    if (!raw) return {};
+
+    const filtered = {};
+    DAYS.forEach((day) => {
+      filtered[day] = (raw[day] || []).map((cell) => {
+        let isMatch = true;
+        if (filterCategory === 'DINING') {
+          isMatch = (cell.category && cell.category.toLowerCase().includes('food')) ||
+                    (cell.trigger && cell.trigger.toLowerCase().includes('dining')) ||
+                    (cell.trigger && cell.trigger.toLowerCase().includes('domino')) ||
+                    (day === 'Fri' && cell.hour >= 18 && cell.hour <= 20);
+        } else if (filterCategory === 'IMPULSE') {
+          isMatch = (cell.category && cell.category.toLowerCase().includes('shop')) ||
+                    (cell.trigger && cell.trigger.toLowerCase().includes('shopping')) ||
+                    (cell.trigger && cell.trigger.toLowerCase().includes('personal')) ||
+                    (day === 'Sat' && cell.hour >= 13 && cell.hour <= 16);
+        } else if (filterCategory === 'SOCIAL') {
+          isMatch = (day === 'Fri' || day === 'Sat' || day === 'Sun') && cell.hour >= 17;
+        }
+
+        if (!isMatch && filterCategory !== 'ALL') {
+          return {
+            ...cell,
+            intensity: Math.min(cell.intensity, 15),
+            isPeakRisk: false,
+          };
+        }
+        return cell;
+      });
+    });
+    return filtered;
+  }, [temporalProfile, transactions, filterCategory]);
 
   const peakWindows = temporalProfile?.peak_vulnerability_windows || [];
   const narrative = temporalProfile?.personalized_narrative || 
@@ -272,19 +349,19 @@ export default function SpendingAnalysisDashboard({
     .map((p, i) => `${i === 0 ? 'M' : 'L'} ${getX(p.month)} ${getY(p.balance)}`)
     .join(' ');
 
-  // Theme-adaptive cell coloring (supports dark and light seamlessly)
-  const getCellColor = (intensity) => {
-    if (intensity < 25) return 'var(--bg-surface-secondary)';
-    if (intensity < 50) return 'rgba(16, 185, 129, 0.22)'; // Teal/Emerald
-    if (intensity < 75) return 'rgba(245, 158, 11, 0.28)'; // Amber
-    return 'rgba(239, 68, 68, 0.35)'; // Rose/Crimson
+  // Theme-adaptive cell coloring with explicit peak impulse risk red highlighting
+  const getCellColor = (intensity, isPeakRisk) => {
+    if (intensity >= 75 || isPeakRisk) return 'rgba(239, 68, 68, 0.48)'; // Red mark for Peak Risk Window
+    if (intensity >= 50) return 'rgba(245, 158, 11, 0.38)'; // Amber
+    if (intensity >= 20) return 'rgba(16, 185, 129, 0.22)'; // Teal/Emerald
+    return 'var(--bg-surface-secondary)';
   };
 
-  const getCellBorder = (intensity) => {
-    if (intensity < 25) return 'var(--border-subtle)';
-    if (intensity < 50) return 'rgba(16, 185, 129, 0.45)';
-    if (intensity < 75) return 'rgba(245, 158, 11, 0.55)';
-    return 'rgba(239, 68, 68, 0.65)';
+  const getCellBorder = (intensity, isPeakRisk) => {
+    if (intensity >= 75 || isPeakRisk) return 'rgba(239, 68, 68, 0.85)';
+    if (intensity >= 50) return 'rgba(245, 158, 11, 0.65)';
+    if (intensity >= 20) return 'rgba(16, 185, 129, 0.45)';
+    return 'var(--border-subtle)';
   };
 
   return (
@@ -455,16 +532,17 @@ export default function SpendingAnalysisDashboard({
 
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               {peakWindows.map((win, idx) => {
-                const isSelected = selectedCell.day === win.day_name && selectedCell.hour >= win.start_hour && selectedCell.hour <= win.end_hour;
+                const winDay = win.day || win.day_name;
+                const isSelected = selectedCell.day === winDay && selectedCell.hour >= win.start_hour && selectedCell.hour <= win.end_hour;
                 return (
                   <button
                     key={win.window_id || idx}
                     onClick={() => {
                       setSelectedCell({
-                        day: win.day_name,
+                        day: winDay,
                         hour: win.start_hour,
-                        intensity: win.mean_intensity,
-                        avgSpend: win.empirical_volume || 450,
+                        intensity: win.mean_intensity || (win.risk_tier === 'HIGH' ? 88 : 72),
+                        avgSpend: win.avg_spend || win.empirical_volume || 450,
                         trigger: win.empirical_trigger,
                       });
                     }}
@@ -534,6 +612,7 @@ export default function SpendingAnalysisDashboard({
                   <div style={{ display: 'flex', flex: 1, gap: '3px' }}>
                     {(activeHeatmapMatrix[day] || []).map((cell) => {
                       const isSelected = selectedCell.day === day && selectedCell.hour === cell.hour;
+                      const isPeak = cell.isPeakRisk || cell.intensity >= 75;
                       return (
                         <div
                           key={cell.hour}
@@ -544,12 +623,13 @@ export default function SpendingAnalysisDashboard({
                             minWidth: '20px',
                             height: '22px',
                             borderRadius: '3px',
-                            background: getCellColor(cell.intensity),
-                            border: isSelected ? '1.5px solid var(--text-primary)' : `1px solid ${getCellBorder(cell.intensity)}`,
+                            background: getCellColor(cell.intensity, isPeak),
+                            border: isSelected ? '2px solid var(--text-primary)' : `1px solid ${getCellBorder(cell.intensity, isPeak)}`,
+                            boxShadow: isPeak ? '0 0 6px rgba(239, 68, 68, 0.35)' : 'none',
                             cursor: 'pointer',
                             transition: 'all 0.1s ease',
                           }}
-                          title={`${day} ${cell.hour}:00 — Risk ${cell.intensity}% (${format(cell.avg_spend || cell.avgSpend || 0)})`}
+                          title={`${day} ${cell.hour}:00 — ${isPeak ? 'PEAK IMPULSE RISK' : 'Risk'} ${cell.intensity}% (${format(cell.avg_spend || cell.avgSpend || 0)})`}
                         />
                       );
                     })}
@@ -612,7 +692,7 @@ export default function SpendingAnalysisDashboard({
                 Empirical Spark / Trigger
               </div>
               <div style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                {selectedCell.trigger || 'Everyday campus spending & UPI micro-payments'}
+                {selectedCell.trigger || 'Everyday merchant spending & UPI transactions'}
               </div>
             </div>
 

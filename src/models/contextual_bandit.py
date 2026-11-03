@@ -60,8 +60,8 @@ class LinUCB:
             A_inv = np.linalg.pinv(self.A[a])
             theta_a = A_inv @ self.b[a]
             # Mean reward estimate + exploration bonus
-            mean_reward = float(theta_a.T @ x)
-            confidence_interval = float(self.alpha * np.sqrt(x.T @ A_inv @ x))
+            mean_reward = float((theta_a.T @ x).item())
+            confidence_interval = float((self.alpha * np.sqrt(x.T @ A_inv @ x)).item())
             p_scores[a] = mean_reward + confidence_interval
 
         best_arm = int(np.argmax(p_scores))

@@ -281,3 +281,18 @@ class FinSenseDB:
             WHERE user_id = ? ORDER BY id ASC LIMIT ?
             """, (user_id, limit))
             return [dict(r) for r in cursor.fetchall()]
+
+    def clear_user_data(self, user_id: str = "0") -> None:
+        """
+        Permanently purges all accounts, transactions, sweeps, subscriptions,
+        and anomaly resolutions for the given user, returning to a pristine clean slate.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM transactions WHERE user_id = ?", (user_id,))
+            cursor.execute("DELETE FROM accounts WHERE user_id = ?", (user_id,))
+            cursor.execute("DELETE FROM auto_save_sweeps WHERE user_id = ?", (user_id,))
+            cursor.execute("DELETE FROM subscriptions WHERE user_id = ?", (user_id,))
+            cursor.execute("DELETE FROM anomaly_resolutions WHERE user_id = ?", (user_id,))
+            conn.commit()
+

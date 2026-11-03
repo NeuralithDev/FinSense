@@ -1,0 +1,12 @@
+{
+  "name": "finsense",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FinSense - Forecast-Grounded Personal Finance Copilot",
+  "scripts": {
+    "dev": "npm --prefix app/frontend run dev",
+    "build": "npm --prefix app/frontend run build",
+    "lint": "npm --prefix app/frontend run lint",
+    "preview": "npm --prefix app/frontend run preview"
+  }
+}

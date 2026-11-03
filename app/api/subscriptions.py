@@ -34,13 +34,16 @@ def get_user_subscriptions(user_id: str = "0"):
         curr = pipeline.accounts["checking"].get("currency", "INR")
         sym = "₹" if curr == "INR" else "$"
 
+        valid_dates = [t["date"] for t in pipeline.raw_transactions if t.get("date")]
+        ref_date = max(valid_dates) if valid_dates else "2026-10-20"
+
         debits = [t for t in pipeline.raw_transactions if not t.get("is_income", False)]
-        if debits and len(debits) >= 10:
+        if debits and len(debits) >= 5:
             df = pd.DataFrame([
                 {"Merchant": t["merchant"], "Amount": t["amount"], "Date": t["date"]}
                 for t in debits
             ])
-            result = detector.analyze_transactions(df, reference_date="2026-10-20", currency_symbol=sym)
+            result = detector.analyze_transactions(df, reference_date=ref_date, currency_symbol=sym)
         else:
             if curr == "INR":
                 tx_data = [
@@ -63,19 +66,7 @@ def get_user_subscriptions(user_id: str = "0"):
                     {"Merchant": "Amazon Prime Membership", "Amount": 14.99, "Date": "2026-10-04"},
                 ]
             df = pd.DataFrame(tx_data)
-            result = detector.analyze_transactions(df, reference_date="2026-10-20", currency_symbol=sym)
-
-        # If analysis from raw transactions gave too few, ensure real student subscriptions are represented
-        if len(result.active_subscriptions) < 2 and curr == "INR":
-            tx_data = [
-                {"Merchant": "Apple Services", "Amount": 75.00, "Date": "2026-08-15"},
-                {"Merchant": "Apple Services", "Amount": 75.00, "Date": "2026-09-14"},
-                {"Merchant": "Apple Services", "Amount": 75.00, "Date": "2026-10-14"},
-                {"Merchant": "AWS Cloud", "Amount": 2.00, "Date": "2026-07-26"},
-                {"Merchant": "JioHotstar", "Amount": 149.00, "Date": "2026-10-06"},
-            ]
-            df = pd.DataFrame(tx_data)
-            result = detector.analyze_transactions(df, reference_date="2026-10-20", currency_symbol=sym)
+            result = detector.analyze_transactions(df, reference_date=ref_date, currency_symbol=sym)
 
         # Map active items
         active_items = []

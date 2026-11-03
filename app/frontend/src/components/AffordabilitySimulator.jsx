@@ -9,10 +9,12 @@ import {
 import { useMetricInspector } from '../store/metricInspectorStore';
 import { useFinanceStore } from '../store/financeStore';
 import { useCurrency } from '../design-system/currencyStore';
+import { useTheme } from '../design-system/themeStore';
 import confetti from 'canvas-confetti';
 
 export default function AffordabilitySimulator() {
   const { format, currency } = useCurrency();
+  const { isDark } = useTheme();
   const { addTransaction, reconciled } = useFinanceStore();
   const { openInspector } = useMetricInspector();
 
@@ -26,12 +28,17 @@ export default function AffordabilitySimulator() {
   const currentSafeToSpend = reconciled.safeToSpend.safeToSpend;
   const currentDailySafe = reconciled.safeToSpend.dailySafeToSpend;
 
-  // Presets calibrated for testing, including the ₹3,500 test case
-  const presets = [
-    { name: 'Weekend Dining & Gadget', amount: 3500, cat: 'SHOPPING' },
-    { name: 'Semester Tech Gear', amount: 4200, cat: 'ELECTRONICS' },
-    { name: 'Campus Study Desk', amount: 2400, cat: 'HOME' },
-    { name: 'Sony WH-1000XM5', amount: 24990, cat: 'ELECTRONICS' },
+  // Presets calibrated for testing and quick simulation
+  const presets = currency.code === 'INR' ? [
+    { name: 'Weekend Dining & Outing', amount: 3500, cat: 'SHOPPING' },
+    { name: 'Tech Gadget / Smartwatch', amount: 4500, cat: 'ELECTRONICS' },
+    { name: 'Ergonomic Desk Chair', amount: 7500, cat: 'HOME' },
+    { name: 'Sony WH-1000XM5 Headphones', amount: 24990, cat: 'ELECTRONICS' },
+  ] : [
+    { name: 'Weekend Dining & Outing', amount: 45, cat: 'SHOPPING' },
+    { name: 'Tech Gadget / Smartwatch', amount: 65, cat: 'ELECTRONICS' },
+    { name: 'Ergonomic Desk Chair', amount: 120, cat: 'HOME' },
+    { name: 'Sony WH-1000XM5 Headphones', amount: 299, cat: 'ELECTRONICS' },
   ];
 
   // Real-time calculation derived from centralized financeEngine
@@ -60,9 +67,10 @@ export default function AffordabilitySimulator() {
     switch (v) {
       case 'SAFE':
         return {
-          bg: '#F0FDF4',
-          border: '#BBF7D0',
-          text: '#0D9488',
+          bg: isDark ? 'rgba(16, 185, 129, 0.12)' : '#F0FDF4',
+          border: isDark ? 'rgba(16, 185, 129, 0.35)' : '#BBF7D0',
+          text: isDark ? '#34D399' : '#0D9488',
+          badgeBg: isDark ? 'rgba(16, 185, 129, 0.25)' : '#DCFCE7',
           icon: CheckCircle2,
           label: 'Safe to Buy Today',
           badgeText: 'Safe Purchase',
@@ -70,9 +78,10 @@ export default function AffordabilitySimulator() {
         };
       case 'STRETCH':
         return {
-          bg: '#FFFBEB',
-          border: '#FDE68A',
-          text: '#D97706',
+          bg: isDark ? 'rgba(245, 158, 11, 0.12)' : '#FFFBEB',
+          border: isDark ? 'rgba(245, 158, 11, 0.35)' : '#FDE68A',
+          text: isDark ? '#FBBF24' : '#D97706',
+          badgeBg: isDark ? 'rgba(245, 158, 11, 0.25)' : '#FEF3C7',
           icon: AlertTriangle,
           label: 'Caution — Dips Into Buffer',
           badgeText: 'Cushion Warning',
@@ -80,9 +89,10 @@ export default function AffordabilitySimulator() {
         };
       default:
         return {
-          bg: '#FFF1F2',
-          border: '#FECDD3',
-          text: '#E11D48',
+          bg: isDark ? 'rgba(239, 68, 68, 0.12)' : '#FFF1F2',
+          border: isDark ? 'rgba(239, 68, 68, 0.35)' : '#FECDD3',
+          text: isDark ? '#F87171' : '#E11D48',
+          badgeBg: isDark ? 'rgba(239, 68, 68, 0.25)' : '#FFE4E6',
           icon: XCircle,
           label: 'Not Recommended — Exceeds Checking Cash',
           badgeText: 'Overdraft Risk',
@@ -324,7 +334,7 @@ export default function AffordabilitySimulator() {
             fontWeight: 700,
             padding: '3px 10px',
             borderRadius: '9999px',
-            background: verdict === 'SAFE' ? '#DCFCE7' : (verdict === 'STRETCH' ? '#FEF3C7' : '#FFE4E6'),
+            background: currentStyle.badgeBg,
             color: currentStyle.text,
             border: `1px solid ${currentStyle.border}`,
           }}>
@@ -332,7 +342,7 @@ export default function AffordabilitySimulator() {
           </span>
         </div>
 
-        <p style={{ fontSize: '0.84rem', color: 'var(--text-primary)', lineHeight: 1.5, margin: 0 }}>
+        <p style={{ fontSize: '0.86rem', color: isDark ? '#E2E8F0' : '#1E293B', lineHeight: 1.5, margin: 0, fontWeight: 500 }}>
           {currentStyle.summary}
         </p>
 

@@ -18,10 +18,10 @@ import {
   Layers,
   DollarSign,
   Activity,
-  Sun,
-  Moon,
   Menu,
-  X
+  X,
+  LogOut,
+  Trash2
 } from 'lucide-react';
 import { useCurrency } from '../../design-system/currencyStore';
 import { useTheme } from '../../design-system/themeStore';
@@ -46,8 +46,9 @@ export default function AppShell({
   const [collapsed, setCollapsed] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const { currency, setCurrency, availableCurrencies } = useCurrency();
-  const { isDark, toggleTheme } = useTheme();
+  const { isDark = false, toggleTheme = () => {} } = useTheme();
   const { scenario, setScenario, availableScenarios } = useScenario();
   const {
     pendingAlertsCount,
@@ -57,8 +58,10 @@ export default function AppShell({
     hasImportedData,
     isDemoMode,
     activeStatementMeta,
+    clearImportedData,
   } = useFinanceStore();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -207,9 +210,9 @@ export default function AppShell({
                   width: '100%',
                   padding: collapsed ? '10px 0' : '9px 12px',
                   borderRadius: '8px',
-                  background: isActive ? (isDark ? '#1F2937' : '#0F172A') : 'transparent',
+                  background: isActive ? '#0F172A' : 'transparent',
                   color: isActive ? '#FFFFFF' : 'var(--text-secondary)',
-                  border: isActive ? `1px solid ${isDark ? '#374151' : '#0F172A'}` : '1px solid transparent',
+                  border: isActive ? '1px solid #0F172A' : '1px solid transparent',
                   cursor: 'pointer',
                   textAlign: 'left',
                   transition: 'background 0.15s ease, color 0.15s ease',
@@ -291,29 +294,55 @@ export default function AppShell({
                   : (activeStatementMeta?.fileName || 'Live Account Synced')}
               </div>
 
-              <button
-                onClick={openSyncModal}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  width: '100%',
-                  padding: '6px 10px',
-                  background: !hasImportedData ? '#0D9488' : 'var(--bg-surface)',
-                  border: !hasImportedData ? 'none' : '1px solid var(--border-subtle)',
-                  borderRadius: '6px',
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  color: !hasImportedData ? '#FFFFFF' : 'var(--text-primary)',
-                  cursor: 'pointer',
-                  boxShadow: 'var(--shadow-xs)',
-                  transition: 'background 0.15s ease',
-                }}
-              >
-                <RefreshCw size={12} />
-                <span>{!hasImportedData ? 'Connect Bank / Import' : 'Sync / Import Statement'}</span>
-              </button>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button
+                  onClick={openSyncModal}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    flex: 1,
+                    padding: '6px 10px',
+                    background: !hasImportedData ? '#0D9488' : 'var(--bg-surface)',
+                    border: !hasImportedData ? 'none' : '1px solid var(--border-subtle)',
+                    borderRadius: '6px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    color: !hasImportedData ? '#FFFFFF' : 'var(--text-primary)',
+                    cursor: 'pointer',
+                    boxShadow: 'var(--shadow-xs)',
+                    transition: 'background 0.15s ease',
+                  }}
+                >
+                  <RefreshCw size={12} />
+                  <span>{!hasImportedData ? 'Connect Bank / Import' : 'Import'}</span>
+                </button>
+
+                {hasImportedData && (
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Delete uploaded statement and reset ledger to zero-state?')) {
+                        clearImportedData();
+                      }
+                    }}
+                    title="Delete uploaded statement data"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '6px 8px',
+                      background: 'rgba(239, 68, 68, 0.08)',
+                      border: '1px solid rgba(239, 68, 68, 0.25)',
+                      borderRadius: '6px',
+                      color: '#EF4444',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -327,9 +356,125 @@ export default function AppShell({
             alignItems: 'center',
             justifyContent: collapsed ? 'center' : 'space-between',
             minHeight: '60px',
+            position: 'relative',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
+          {/* User Popover Menu */}
+          <AnimatePresence>
+            {isUserMenuOpen && !collapsed && (
+              <motion.div
+                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                transition={{ duration: 0.15 }}
+                style={{
+                  position: 'absolute',
+                  bottom: '70px',
+                  left: '12px',
+                  right: '12px',
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: '12px',
+                  boxShadow: 'var(--shadow-lg)',
+                  padding: '12px',
+                  zIndex: 50,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '8px' }}>
+                  <div
+                    style={{
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '50%',
+                      background: '#0D9488',
+                      color: '#FFFFFF',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                    }}
+                  >
+                    {(user?.name || 'U').charAt(0).toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, overflow: 'hidden' }}>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {user?.name || 'FinSense User'}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {user?.email || 'Authenticated User'}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', padding: '2px 4px' }}>
+                  Auth: {user?.provider === 'google' ? 'Google OAuth Account' : 'Credentials'}
+                </div>
+
+                {hasImportedData && (
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Delete uploaded statement and reset financial ledger?')) {
+                        clearImportedData();
+                        setIsUserMenuOpen(false);
+                      }
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '7px 8px',
+                      borderRadius: '6px',
+                      background: 'rgba(239, 68, 68, 0.08)',
+                      border: '1px solid rgba(239, 68, 68, 0.25)',
+                      color: '#EF4444',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <Trash2 size={13} />
+                    <span>Delete Statement Data</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={() => {
+                    logout();
+                    setIsUserMenuOpen(false);
+                    if (onOpenLanding) onOpenLanding();
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '7px 8px',
+                    borderRadius: '6px',
+                    background: 'var(--bg-surface-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <LogOut size={13} />
+                  <span>Sign Out</span>
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div
+            onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+            style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden', cursor: 'pointer', flex: 1 }}
+            title="Click for account options & sign out"
+          >
             <div
               style={{
                 width: '32px',
@@ -352,38 +497,18 @@ export default function AppShell({
               )}
             </div>
             {!collapsed && (
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>
-                  {user?.name || 'Mudit Sharma'}
+              <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {user?.name || 'FinSense User'}
                 </span>
-                <span style={{ fontSize: '0.675rem', color: 'var(--text-muted)' }}>
-                  {user?.email || 'FinSense Plus Member'}
+                <span style={{ fontSize: '0.675rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {user?.email || (user ? 'Account Active' : 'Guest Explorer')}
                 </span>
               </div>
             )}
           </div>
-
-          {!collapsed && (
-            <button
-              onClick={toggleTheme}
-              title={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
-              style={{
-                background: 'var(--bg-surface-secondary)',
-                border: '1px solid var(--border-subtle)',
-                color: isDark ? '#FBBF24' : '#0F172A',
-                borderRadius: '8px',
-                padding: '6px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'transform 0.15s ease',
-              }}
-            >
-              {isDark ? <Sun size={15} /> : <Moon size={15} />}
-            </button>
-          )}
         </div>
+
       </aside>
 
       {/* Main Content Area */}
@@ -459,32 +584,8 @@ export default function AppShell({
             </button>
           </div>
 
-          {/* Right Controls: Theme Toggle, Scenario Switcher, Currency, Sync */}
+          {/* Right Controls: Scenario Switcher, Currency, Sync */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {/* Dual Theme Toggle Pill */}
-            <button
-              onClick={toggleTheme}
-              title={`Switch to ${isDark ? 'Editorial Light' : 'Obsidian Luxury Dark'} Mode`}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 10px',
-                background: 'var(--bg-surface-secondary)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: '8px',
-                color: 'var(--text-primary)',
-                fontSize: '0.78rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {isDark ? <Sun size={14} style={{ color: '#FBBF24' }} /> : <Moon size={14} style={{ color: '#0F172A' }} />}
-              <span style={{ display: 'none', '@media (min-width: 640px)': { display: 'inline' } }}>
-                {isDark ? 'Dark' : 'Light'}
-              </span>
-            </button>
 
             {/* Scenario Switcher Dropdown */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -739,29 +840,7 @@ export default function AppShell({
                 })}
               </div>
 
-              <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Appearance</span>
-                  <button
-                    onClick={toggleTheme}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '6px 10px',
-                      background: 'var(--bg-surface-secondary)',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: '6px',
-                      color: 'var(--text-primary)',
-                      fontSize: '0.78rem',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {isDark ? <Sun size={13} style={{ color: '#FBBF24' }} /> : <Moon size={13} />}
-                    <span>{isDark ? 'Dark Mode' : 'Light Mode'}</span>
-                  </button>
-                </div>
-              </div>
+
             </motion.div>
           </motion.div>
         )}

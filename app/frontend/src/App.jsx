@@ -54,7 +54,7 @@ export default function App() {
   const [autopilotData, setAutopilotData] = useState(null);
   const [twinData, setTwinData] = useState(null);
 
-  const { refreshStore } = useFinanceStore();
+  const { refreshStore, activeStatementMeta, hasImportedData, isDemoMode } = useFinanceStore();
 
   // Initialize Lenis smooth scroll
   useEffect(() => {
@@ -103,7 +103,13 @@ export default function App() {
 
   useEffect(() => {
     loadData(horizonDays);
-  }, []);
+  }, [activeStatementMeta?.importedAt, hasImportedData, isDemoMode]);
+
+  useEffect(() => {
+    const handleRefresh = () => loadData(horizonDays);
+    window.addEventListener('finsense_statement_imported', handleRefresh);
+    return () => window.removeEventListener('finsense_statement_imported', handleRefresh);
+  }, [horizonDays]);
 
   const handleHorizonChange = async (days) => {
     setHorizonDays(days);
