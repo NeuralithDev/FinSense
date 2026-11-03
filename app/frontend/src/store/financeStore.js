@@ -566,10 +566,6 @@ export function deleteUploadedStatementAction() {
   clearImportedDataAction();
 }
 
-export function resetToDemoDataAction() {
-  loadDemoDataAction();
-}
-
 
 /**
  * Triggers a real-time live transaction (or simulates live webhook swipe)
